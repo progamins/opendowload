@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  /* Graphite / studio-console palette. No warm-cream, no near-black+neon-vermilion
+     defaults -- this app lives in the language of audio hardware: brushed
+     graphite chassis, an amber VU needle, a cool teal signal line. */
+  --color-graphite-950: #101216;
+  --color-graphite-900: #15181d;
+  --color-graphite-800: #1b1f26;
+  --color-graphite-700: #232830;
+  --color-graphite-600: #2c323c;
+  --color-graphite-500: #3a4150;
+  --color-hairline: #2a2f38;
+
+  --color-ink-50: #f3f4f6;
+  --color-ink-200: #cdd1d9;
+  --color-ink-400: #8b93a1;
+  --color-ink-600: #5c6472;
+
+  --color-amber-400: #f0b24d;
+  --color-amber-500: #e8a33d;
+  --color-amber-600: #c98526;
+
+  --color-teal-400: #6fe0d3;
+  --color-teal-500: #4fd1c5;
+  --color-teal-600: #33ada2;
+
+  --color-danger-400: #f0656a;
+  --color-danger-500: #e5484d;
+
+  --font-display: "Space Grotesk", "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-data: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-graphite-950 text-ink-50 antialiased;
+    font-family: var(--font-body);
+    background:
+      radial-gradient(900px 600px at 15% -10%, color-mix(in srgb, var(--color-amber-500) 8%, transparent), transparent 60%),
+      radial-gradient(800px 600px at 85% 0%, color-mix(in srgb, var(--color-teal-500) 7%, transparent), transparent 60%),
+      radial-gradient(1200px 800px at 50% 100%, color-mix(in srgb, var(--color-graphite-700) 40%, transparent), transparent 70%),
+      var(--color-graphite-950);
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-amber-500) 35%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-amber-500);
+    outline-offset: 2px;
+  }
+
+  /* custom scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--color-graphite-900); }
+  ::-webkit-scrollbar-thumb { background: var(--color-graphite-600); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-graphite-500); }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  .font-data {
+    font-family: var(--font-data);
+    font-variant-numeric: tabular-nums;
+  }
+  .glass {
+    background: color-mix(in srgb, var(--color-graphite-800) 80%, transparent);
+    backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--color-hairline) 80%, transparent);
+  }
+  .glow-amber {
+    box-shadow: 0 0 30px color-mix(in srgb, var(--color-amber-500) 15%, transparent), 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .glow-teal {
+    box-shadow: 0 0 24px color-mix(in srgb, var(--color-teal-500) 15%, transparent);
+  }
+  .animate-in {
+    animation: animateIn 0.4s ease-out;
+  }
+  @keyframes animateIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* Light theme override, applied via [data-theme="light"] on <html> */
+[data-theme="light"] {
+  color-scheme: light;
+  --color-graphite-950: #f5f6f8;
+  --color-graphite-900: #eef0f3;
+  --color-graphite-800: #ffffff;
+  --color-graphite-700: #f0f1f4;
+  --color-graphite-600: #e2e5ea;
+  --color-graphite-500: #c7cdd6;
+  --color-hairline: #dde1e7;
+  --color-ink-50: #14161a;
+  --color-ink-200: #333844;
+  --color-ink-400: #666e7c;
+  --color-ink-600: #9aa1ac;
+}
