@@ -231,26 +231,37 @@ echo %DATE% %TIME% > "%PID_TUNNEL%"
 for /f "tokens=2 delims=," %%p in ('tasklist /fi "imagename eq cloudflared.exe" /fo csv ^| findstr cloudflared') do echo %%p >> "%PID_TUNNEL%" 2>nul
 
 :PROD_TUNNEL_WAIT
-echo Esperando URL trycloudflare.com (max 30s)...
-for /l %%i in (1,1,15) do (
+echo Esperando URL trycloudflare.com (max 60s, puede tardar la primera vez)...
+for /l %%i in (1,1,30) do (
   timeout /t 2 /nobreak >nul
-  findstr "trycloudflare.com" "%CF_LOG%" >nul 2>&1
+  findstr /i "trycloudflare.com" "%CF_LOG%" >nul 2>&1
   if %ERRORLEVEL% equ 0 goto PROD_URL_FOUND
-  echo  Esperando tunnel... %%i/15
+  tasklist | findstr "cloudflared" >nul 2>&1
+  if %ERRORLEVEL% neq 0 (
+    echo [ERROR] cloudflared se cerro inesperadamente
+    type "%CF_LOG%" 2>nul
+    pause & goto MENU
+  )
+  echo  Esperando tunnel... %%i/30
 )
-echo [ERROR] No se detecto URL. Log:
+echo [ERROR] No se detecto URL en 60s. Log completo:
 type "%CF_LOG%" 2>nul
+echo.
+echo [INFO] Intenta de nuevo o revisa tu conexion. El tunnel puede tardar 10-20s la primera vez.
 pause & goto MENU
 
 :PROD_URL_FOUND
-for /f "tokens=*" %%u in ('findstr /r "https://.*trycloudflare.com" "%CF_LOG%"') do set RAW_URL=%%u
-:: Extraer solo la URL https://xxxx.trycloudflare.com
-for /f "tokens=2 delims= " %%a in ('echo %RAW_URL% ^| findstr /r "https://.*trycloudflare.com"') do set TUNNEL_URL=%%a
-if not defined TUNNEL_URL set TUNNEL_URL=%RAW_URL%
-:: Limpiar: quitar caracteres raros y quedarnos con https://xxx.trycloudflare.com
-for /f "tokens=1 delims= " %%a in ("%TUNNEL_URL%") do set TUNNEL_URL=%%a
-echo %TUNNEL_URL% | findstr "trycloudflare.com" >nul || (
-  for /f "tokens=*" %%a in ('powershell -NoProfile -Command "Select-String -Path '%CF_LOG%' -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Value } "') do set TUNNEL_URL=%%a
+:: Extraer URL con PowerShell (mas robusto que findstr)
+for /f "delims=" %%a in ('powershell -NoProfile -Command "$m=Select-String -Path '%CF_LOG%' -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' -AllMatches; if($m){$m.Matches | Select-Object -Last 1 | ForEach-Object { $_.Value } } else { Get-Content '%CF_LOG%' | Select-String 'trycloudflare' | Select-Object -Last 1 }" 2^>nul') do set TUNNEL_URL=%%a
+:: Fallback: buscar cualquier https con trycloudflare
+if not defined TUNNEL_URL (
+  for /f "tokens=*" %%u in ('findstr /i "trycloudflare.com" "%CF_LOG%" 2^>nul') do set RAW_URL=%%u
+  for /f "tokens=2 delims= " %%a in ("%RAW_URL%") do set TUNNEL_URL=%%a
+  if not defined TUNNEL_URL set TUNNEL_URL=%RAW_URL%
+)
+:: Limpiar espacios y pipes
+if defined TUNNEL_URL (
+  for /f "tokens=*" %%a in ('powershell -NoProfile -Command "('%TUNNEL_URL%'.Trim() -replace '.*(https://[a-z0-9-]+\.trycloudflare\.com).*','$1')" 2^>nul') do set TUNNEL_URL=%%a
 )
 if not defined TUNNEL_URL (
   echo [ERROR] No se pudo extraer URL
