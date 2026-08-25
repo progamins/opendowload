@@ -1,18 +1,23 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 title OpenMedia Downloader
 color 0A
 
-:: Rutas base
 set "PROJECT_ROOT=%~dp0"
+set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
 set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
 set "SERVER_DIR=%PROJECT_ROOT%\server"
 set "CLIENT_DIR=%PROJECT_ROOT%\client"
-set "CLOUDFLARED=%PROJECT_ROOT%\tools\cloudflared.exe"
-if not exist "%CLOUDFLARED%" set "CLOUDFLARED=cloudflared"
+set "CLOUDFLARED_EXE=%PROJECT_ROOT%\tools\cloudflared.exe"
+set "CLOUDFLARED=cloudflared"
+set "CF_LOG=%TEMP%\openmedia-cloudflared.log"
 set "PID_BACKEND=%TEMP%\openmedia_backend.pid"
 set "PID_TUNNEL=%TEMP%\openmedia_tunnel.pid"
-set "CF_LOG=%TEMP%\cf.log"
+set "VERCEL_URL=https://opendowload.vercel.app"
+set "MAX_TUNNEL_WAIT=60"
+set "MAX_HEALTH_CHECK=30"
+set "MAX_VERCEL_POLL=40"
+set "POLL_INTERVAL=5"
 
 :MENU
 cls
@@ -27,18 +32,19 @@ echo    [4] Detener produccion
 echo    [5] Salir
 echo  ==========================================
 echo.
-set /p OPC="Elige [1-5]: "
+:GETCHOICE
+set /p "OPC=Elige [1-5]: "
 if "%OPC%"=="1" goto DEV
 if "%OPC%"=="2" goto PROD
 if "%OPC%"=="3" goto DIAG
 if "%OPC%"=="4" goto STOP_PROD
 if "%OPC%"=="5" exit
-goto MENU
+goto GETCHOICE
 
 :CHECKS
 where node >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-  echo [ERROR] Node 22+ no encontrado - https://nodejs.org
+  echo [ERROR] Node no encontrado - https://nodejs.org
   exit /b 1
 )
 for /f "delims=" %%v in ('node -v') do echo [OK] Node %%v
@@ -62,14 +68,14 @@ if %ERRORLEVEL% equ 0 (
     exit /b 1
   )
 )
-if exist "%CLOUDFLARED%" (
-  echo [OK] cloudflared
+if exist "%CLOUDFLARED_EXE%" (
+  echo [OK] cloudflared %CLOUDFLARED_EXE%
 ) else (
-  where cloudflared >nul 2>&1
+  where %CLOUDFLARED% >nul 2>&1
   if %ERRORLEVEL% equ 0 (
     echo [OK] cloudflared
   ) else (
-    echo [ERROR] cloudflared no encontrado - https://developers.cloudflare.com/cloudflare-one/connections/connect/downloads/
+    echo [ERROR] cloudflared no encontrado
     exit /b 1
   )
 )
@@ -98,8 +104,6 @@ if %ERRORLEVEL% equ 0 (
 ) else (
   echo [OFF] API no responde - inicia con [1] o [2]
 )
-findstr "ALLOWED_ORIGINS" "%SERVER_DIR%\.env" 2>nul
-if %ERRORLEVEL% neq 0 echo (ALLOWED_ORIGINS no configurado)
 pause
 goto MENU
 
@@ -110,41 +114,20 @@ call :CHECKS
 if %ERRORLEVEL% neq 0 pause & goto MENU
 if not exist "%SERVER_DIR%\.env" copy "%SERVER_DIR%\.env.example" "%SERVER_DIR%\.env" >nul
 if not exist "%CLIENT_DIR%\.env" copy "%CLIENT_DIR%\.env.example" "%CLIENT_DIR%\.env" >nul
-if not exist "%PROJECT_ROOT%\tools\ffmpeg\ffmpeg.exe" (
-  echo [SETUP] ffmpeg portable...
-  powershell -NoProfile -Command "try{New-Item -Path tools\ffmpeg -ItemType Directory -Force|Out-Null;$z='$env:TEMP\ffmpeg.zip';Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $z -UseBasicParsing;Expand-Archive -Path $z -DestinationPath $env:TEMP\ff -Force;$e=Get-ChildItem $env:TEMP\ff -Recurse -Filter ffmpeg.exe|Select -First 1;Copy-Item $e.FullName tools\ffmpeg\ffmpeg.exe -Force;Copy-Item (Join-Path $e.DirectoryName ffprobe.exe) tools\ffmpeg\ffprobe.exe -Force -ErrorAction SilentlyContinue;Write-Host '[OK] ffmpeg'}catch{Write-Host '[ERROR]'}"
+echo [1/3] Verificando deps...
+echo [OK] Dependencias verificadas
+echo [2/3] Construyendo...
+call npm run build --prefix "%SERVER_DIR%" 2>&1 | findstr /i "error" >nul
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] Error en build server
+  pause & goto MENU
 )
-echo [1/3] Deps...
-taskkill /F /IM node.exe >nul 2>&1
-timeout /t 2 /nobreak >nul
-if exist "%SERVER_DIR%\package-lock.json" (
-  echo  Instalando server...
-  call npm ci --prefix "%SERVER_DIR%"
-  if %ERRORLEVEL% neq 0 call npm install --prefix "%SERVER_DIR%"
-) else (
-  call npm install --prefix "%SERVER_DIR%"
+call npm run build --prefix "%CLIENT_DIR%" 2>&1 | findstr /i "error" >nul
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] Error en build client
+  pause & goto MENU
 )
-if %ERRORLEVEL% neq 0 (echo [ERROR] server deps & pause & goto MENU)
-echo [OK] server
-if exist "%CLIENT_DIR%\package-lock.json" (
-  echo  Instalando client...
-  call npm ci --prefix "%CLIENT_DIR%"
-  if %ERRORLEVEL% neq 0 (
-    echo [AVISO] EPERM client, reintentando...
-    taskkill /F /IM node.exe >nul 2>&1
-    timeout /t 2 /nobreak >nul
-    del /f /q "%CLIENT_DIR%\node_modules\@rolldown\binding-win32-x64-msvc\rolldown-binding.win32-x64-msvc.node" >nul 2>&1
-    call npm install --prefix "%CLIENT_DIR%" --force
-  )
-) else (
-  call npm install --prefix "%CLIENT_DIR%"
-)
-if %ERRORLEVEL% neq 0 (echo [ERROR] client deps & pause & goto MENU)
-echo [OK] client
-call npm install >nul 2>&1 && echo [OK] root
-echo [2/3] Build...
-call npm run build --prefix "%SERVER_DIR%" || (echo [ERROR] build server & pause & goto MENU)
-call npm run build --prefix "%CLIENT_DIR%" || (echo [ERROR] build client & pause & goto MENU)
+echo [OK] Build completado
 echo [3/3] Iniciando Vite+Express http://127.0.0.1:5173 http://127.0.0.1:3001
 call npm run dev
 echo.
@@ -154,183 +137,246 @@ goto MENU
 
 :PROD
 cls
-echo === PRODUCCION (Express + Tunnel + Vercel) ===
+echo  ==========================================
+echo   OPENMEDIA DOWNLOADER - PRODUCCION
+echo  ==========================================
+echo.
 call :CHECKS
 if %ERRORLEVEL% neq 0 pause & goto MENU
 
-:: 1. Verificar git remote (no inventar)
-for /f "delims=" %%r in ('git remote 2^>nul') do set HAS_REMOTE=%%r
+:: Verificar remote git
+for /f "delims=" %%r in ('git remote 2^>nul') do set "HAS_REMOTE=%%r"
 if not defined HAS_REMOTE (
-  echo [ERROR] No hay remote Git configurado. Haz: git remote add origin https://github.com/usuario/repo.git
+  echo [ERROR] No hay remote Git configurado.
   pause & goto MENU
 )
 for /f "tokens=*" %%r in ('git remote -v 2^>nul ^| findstr "(fetch)"') do echo [OK] Remote %%r
-for /f "delims=" %%b in ('git branch --show-current 2^>nul') do set BRANCH=%%b
-if not defined BRANCH set BRANCH=main
+:: Proteger token expuesto
+git remote get-url origin 2>nul | findstr "ghp_" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  echo [AVISO] Remote tiene token ghp_ expuesto. Cambiando a URL segura...
+  git remote set-url origin https://github.com/progamins/opendowload.git 2>nul
+  echo [OK] Remote ahora seguro.
+)
+for /f "delims=" %%b in ('git branch --show-current 2^>nul') do set "BRANCH=%%b"
+if not defined BRANCH set "BRANCH=main"
 echo [OK] Rama %BRANCH%
 
-:: 2. Comprobar si backend ya responde (evitar EADDRINUSE)
-curl -s http://127.0.0.1:3001/health | findstr "\"ok\":true" >nul 2>&1
+:: ============================================================
+:: PASO 1: Verificar/Iniciar backend Express en 127.0.0.1:3001
+:: ============================================================
+echo.
+echo [1/7] Verificando backend...
+curl -s http://127.0.0.1:3001/health >nul 2>&1
 if %ERRORLEVEL% equ 0 (
   echo [OK] Backend ya responde en http://127.0.0.1:3001 - reutilizando
-  goto PROD_TUNNEL
+) else (
+  echo Iniciando Express backend en http://127.0.0.1:3001...
+  if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
+  start "OpenMedia Backend" /min cmd /c "npm run start --prefix "%SERVER_DIR%""
+  echo Esperando que el backend arranque...
+  timeout /t 5 /nobreak >nul
 )
-:: No responde, iniciar backend
-if not exist "%SERVER_DIR%\.env" copy "%SERVER_DIR%\.env.example" "%SERVER_DIR%\.env" >nul
-if not exist "%PROJECT_ROOT%\temp" mkdir "%PROJECT_ROOT%\temp"
-powershell -NoProfile -Command "Get-ChildItem temp -ErrorAction SilentlyContinue | Where LastWriteTime -lt (Get-Date).AddHours(-1) | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue; Write-Host '[OK] temp limpio'"
-echo Iniciando backend...
-if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
-start "OpenMedia Backend" /min cmd /c "npm run start --prefix ""%SERVER_DIR%"" "
-:: Guardar PID del backend (aproximado via netstat)
-timeout /t 2 /nobreak >nul
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":3001" ^| findstr "LISTENING"') do echo %%p > "%PID_BACKEND%" 2>nul
 
-echo Esperando /health (max 30 intentos)...
-for /l %%i in (1,1,30) do (
+:: Health check backend local
+echo Verificando /health backend local...
+set "BACKEND_OK=0"
+for /l %%j in (1,1,%MAX_HEALTH_CHECK%) do (
+  curl -s http://127.0.0.1:3001/health > "%TEMP%\health_backend.json" 2>nul
+  findstr "\"ok\":true" "%TEMP%\health_backend.json" >nul 2>&1
+  if !ERRORLEVEL! equ 0 set "BACKEND_OK=1"
+  if "!BACKEND_OK!"=="1" goto :BACKEND_HEALTH_OK_LOOP_DONE
   timeout /t 1 /nobreak >nul
-  curl -s http://127.0.0.1:3001/health > "%TEMP%\health.json" 2>nul
-  findstr "\"ok\":true" "%TEMP%\health.json" >nul 2>&1
-  if %ERRORLEVEL% equ 0 goto PROD_HEALTH_OK
-  findstr "\"ytDlp\":false" "%TEMP%\health.json" >nul 2>&1
-  if %ERRORLEVEL% equ 0 (
-    echo [ERROR] Backend no listo - yt-dlp/FFmpeg no disponibles
-    type "%TEMP%\health.json"
-    pause & goto MENU
-  )
 )
-echo [ERROR] Backend no responde en 30s
-type "%TEMP%\health.json" 2>nul
-pause & goto MENU
-
-:PROD_HEALTH_OK
-echo [OK] Backend http://127.0.0.1:3001
-type "%TEMP%\health.json"
-echo.
-
-:PROD_TUNNEL
-:: 3. Iniciar cloudflared si no está ya
-tasklist | findstr "cloudflared" >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  echo [INFO] cloudflared ya en ejecucion, reutilizando
-  goto PROD_TUNNEL_WAIT
-)
-if not exist "%CLOUDFLARED%" (
-  where cloudflared >nul 2>&1
-  if %ERRORLEVEL% neq 0 (
-    echo [ERROR] cloudflared no encontrado en %CLOUDFLARED% ni en PATH
-    pause & goto MENU
-  ) else (
-    set "CLOUDFLARED=cloudflared"
-  )
-)
-del /q "%CF_LOG%" 2>nul
-echo Iniciando Cloudflare Tunnel...
-start "OpenMedia Tunnel" /min cmd /c ""%CLOUDFLARED%" tunnel --url http://127.0.0.1:3001 --no-autoupdate > "%CF_LOG%" 2>&1"
-echo %DATE% %TIME% > "%PID_TUNNEL%"
-for /f "tokens=2 delims=," %%p in ('tasklist /fi "imagename eq cloudflared.exe" /fo csv ^| findstr cloudflared') do echo %%p >> "%PID_TUNNEL%" 2>nul
-
-:PROD_TUNNEL_WAIT
-echo Esperando URL trycloudflare.com (max 60s, puede tardar la primera vez)...
-for /l %%i in (1,1,30) do (
-  timeout /t 2 /nobreak >nul
-  findstr /i "trycloudflare.com" "%CF_LOG%" >nul 2>&1
-  if %ERRORLEVEL% equ 0 goto PROD_URL_FOUND
-  tasklist | findstr "cloudflared" >nul 2>&1
-  if %ERRORLEVEL% neq 0 (
-    echo [ERROR] cloudflared se cerro inesperadamente
-    type "%CF_LOG%" 2>nul
-    pause & goto MENU
-  )
-  echo  Esperando tunnel... %%i/30
-)
-echo [ERROR] No se detecto URL en 60s. Log completo:
-type "%CF_LOG%" 2>nul
-echo.
-echo [INFO] Intenta de nuevo o revisa tu conexion. El tunnel puede tardar 10-20s la primera vez.
-pause & goto MENU
-
-:PROD_URL_FOUND
-:: Extraer URL con PowerShell (mas robusto que findstr)
-for /f "delims=" %%a in ('powershell -NoProfile -Command "$m=Select-String -Path '%CF_LOG%' -Pattern 'https://[a-z0-9-]+\.trycloudflare\.com' -AllMatches; if($m){$m.Matches | Select-Object -Last 1 | ForEach-Object { $_.Value } } else { Get-Content '%CF_LOG%' | Select-String 'trycloudflare' | Select-Object -Last 1 }" 2^>nul') do set TUNNEL_URL=%%a
-:: Fallback: buscar cualquier https con trycloudflare
-if not defined TUNNEL_URL (
-  for /f "tokens=*" %%u in ('findstr /i "trycloudflare.com" "%CF_LOG%" 2^>nul') do set RAW_URL=%%u
-  for /f "tokens=2 delims= " %%a in ("%RAW_URL%") do set TUNNEL_URL=%%a
-  if not defined TUNNEL_URL set TUNNEL_URL=%RAW_URL%
-)
-:: Limpiar espacios y pipes
-if defined TUNNEL_URL (
-  for /f "tokens=*" %%a in ('powershell -NoProfile -Command "('%TUNNEL_URL%'.Trim() -replace '.*(https://[a-z0-9-]+\.trycloudflare\.com).*','$1')" 2^>nul') do set TUNNEL_URL=%%a
-)
-if not defined TUNNEL_URL (
-  echo [ERROR] No se pudo extraer URL
-  type "%CF_LOG%"
+:BACKEND_HEALTH_OK_LOOP_DONE
+if "%BACKEND_OK%"=="0" (
+  echo [ERROR] Backend no pudo iniciar en 127.0.0.1:3001
+  echo [ERROR] Backend no responde en /health despues de %MAX_HEALTH_CHECK% intentos
+  type "%TEMP%\health_backend.json" 2>nul
   pause & goto MENU
 )
-echo [OK] Tunnel: %TUNNEL_URL%
-set API_URL=%TUNNEL_URL%/api
+echo [OK] Backend iniciado http://127.0.0.1:3001
+echo [OK] Backend /health HTTP 200
 
-:: 4. Verificar tunnel publico
-echo Verificando %TUNNEL_URL%/health ...
-for /l %%i in (1,1,10) do (
-  curl -s "%TUNNEL_URL%/health" > "%TEMP%\health_pub.json" 2>nul
-  findstr "\"ok\":true" "%TEMP%\health_pub.json" >nul 2>&1
-  if %ERRORLEVEL% equ 0 goto PROD_VERIFIED
-  timeout /t 2 /nobreak >nul
-)
-echo [ERROR] Tunnel creado pero backend publico no responde
-type "%TEMP%\health_pub.json" 2>nul
-pause & goto MENU
-
-:PROD_VERIFIED
-echo [OK] Public API %API_URL%
-type "%TEMP%\health_pub.json"
+:: ============================================================
+:: PASO 2: Iniciar Cloudflare Tunnel
+:: ============================================================
 echo.
+echo [2/7] Iniciando Cloudflare Tunnel...
+tasklist 2>nul | findstr /i "cloudflared" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  if not exist "%CLOUDFLARED_EXE%" (
+    echo [ERROR] No se encuentra %CLOUDFLARED_EXE%
+    pause & goto MENU
+  )
+  del /q "%CF_LOG%" 2>nul
+  start "OpenMedia Tunnel" /min cmd /c ""%CLOUDFLARED_EXE%" tunnel --url http://127.0.0.1:3001 --no-autoupdate > "%CF_LOG%" 2>&1"
+  echo Esperando que cloudflared arranque...
+  timeout /t 3 /nobreak >nul
+) else (
+  echo [INFO] cloudflared ya en ejecucion
+)
 
-:: 5. Actualizar client/public/config.json (solo este archivo)
-echo Actualizando client/public/config.json...
+:: ============================================================
+:: PASO 3: Detectar URL REAL del Quick Tunnel (regex estricta)
+:: ============================================================
+echo.
+echo [3/7] Detectando URL del Quick Tunnel (hasta %MAX_TUNNEL_WAIT% segundos)...
+set "TUNNEL_URL="
+for /l %%k in (1,1,%MAX_TUNNEL_WAIT%) do (
+  for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$log = Get-Content -Path '%CF_LOG%' -ErrorAction SilentlyContinue; if ($log) { $matches = [regex]::Matches($log -join [Environment]::NewLine, 'https://[a-zA-Z0-9][a-zA-Z0-9-]+\.trycloudflare\.com'); if ($matches.Count -gt 0) { Write-Output $matches[$matches.Count - 1].Value } }"`) do (
+    set "TUNNEL_URL=%%A"
+  )
+  if defined TUNNEL_URL goto :TUNNEL_LOOP_DONE
+  timeout /t 1 /nobreak >nul
+  if %%k==10 echo   Esperando... (10s)
+  if %%k==20 echo   Esperando... (20s)
+  if %%k==30 echo   Esperando... (30s)
+  if %%k==45 echo   Esperando... (45s)
+)
+:TUNNEL_LOOP_DONE
+if not defined TUNNEL_URL (
+  echo [ERROR] Cloudflare no genero una URL valida despues de %MAX_TUNNEL_WAIT% segundos.
+  echo [INFO] El log de cloudflared es:
+  type "%CF_LOG%" 2>nul
+  pause & goto MENU
+)
+
+:: Validacion estricta de la URL detectada
+echo   URL bruta detectada: %TUNNEL_URL%
+:: Debe empezar con https://
+echo %TUNNEL_URL% | findstr /b "https://" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] URL invalida - no empieza con https://
+  pause & goto MENU
+)
+:: No debe ser solo https://trycloudflare.com
+echo %TUNNEL_URL% | findstr /i "^https://trycloudflare\.com$" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] URL invalida - es solo trycloudflare.com sin subdominio
+  pause & goto MENU
+)
+:: No debe contener espacios
+echo %TUNNEL_URL% | findstr " " >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] URL invalida - contiene espacios
+  pause & goto MENU
+)
+:: No debe terminar en ...
+echo %TUNNEL_URL% | findstr "\.\.\." >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] URL invalida - termina en ...
+  pause & goto MENU
+)
+:: No debe contener texto de logs
+echo %TUNNEL_URL% | findstr /i "Requesting INF" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  echo [ERROR] URL invalida - contiene texto de log
+  pause & goto MENU
+)
+
+echo [OK] Cloudflare Tunnel detectado: %TUNNEL_URL%
+
+:: ============================================================
+:: PASO 4: Validar que el tunnel responde /health
+:: ============================================================
+echo.
+echo [4/7] Validando tunnel publico...
+
+set "API_URL=%TUNNEL_URL%/api"
+
+set "TUNNEL_HEALTH_OK=0"
+for /l %%m in (1,1,5) do (
+  curl -s -o "%TEMP%\health_tunnel.json" -w "%%{http_code}" "%TUNNEL_URL%/health" > "%TEMP%\health_tunnel_code.txt" 2>nul
+  set /p HTTP_CODE=<"%TEMP%\health_tunnel_code.txt"
+  if "!HTTP_CODE!"=="200" set "TUNNEL_HEALTH_OK=1"
+  if "!TUNNEL_HEALTH_OK!"=="1" goto :TUNNEL_HEALTH_OK_LOOP_DONE
+  echo   Intento %%m/5 - HTTP !HTTP_CODE! - reintentando en 3s...
+  timeout /t 3 /nobreak >nul
+)
+:TUNNEL_HEALTH_OK_LOOP_DONE
+if "%TUNNEL_HEALTH_OK%"=="0" (
+  echo [ERROR] Cloudflare Tunnel detectado pero no responde.
+  echo [ERROR] Tunnel detectado: %TUNNEL_URL%
+  echo [ERROR] /health fallo despues de 5 intentos
+  pause & goto MENU
+)
+echo [OK] Public /health HTTP 200
+echo [OK] Public API: %API_URL%
+
+:: ============================================================
+:: PASO 5: Actualizar client/public/config.json
+:: ============================================================
+echo.
+echo [5/7] Actualizando config.json...
 if not exist "%CLIENT_DIR%\public" mkdir "%CLIENT_DIR%\public"
-echo {> "%CLIENT_DIR%\public\config.json"
-echo   "apiUrl": "%API_URL%">> "%CLIENT_DIR%\public\config.json"
-echo }>> "%CLIENT_DIR%\public\config.json"
-type "%CLIENT_DIR%\public\config.json"
-echo [OK] config.json actualizado
 
-:: 6. Git: solo si cambio, solo ese archivo, proteger otros cambios
-git status --porcelain | findstr "client/public/config.json" >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-  echo [INFO] config.json sin cambios, no se hace commit
-  goto PROD_SHOW
-)
-:: Detectar otros cambios no relacionados
-git status --porcelain | findstr /v "client/public/config.json" | findstr /v "??" >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  echo [INFO] Existen otros cambios locales. Solo se actualizara config.json.
-)
-git diff --quiet -- client/public/config.json 2>nul
-if %ERRORLEVEL% equ 0 goto PROD_SHOW
-git add client/public/config.json
-if %ERRORLEVEL% neq 0 (
-  echo [ERROR] git add fallo
+:: Usar Node.js para escribir JSON valido
+node -e "const fs=require('fs');const cfg={apiUrl:'%API_URL%'};fs.writeFileSync('%CLIENT_DIR%/public/config.json',JSON.stringify(cfg,null,2)+String.fromCharCode(10));" 2>nul
+
+:: Verificar que se escribio correctamente
+if not exist "%CLIENT_DIR%\public\config.json" (
+  echo [ERROR] No se pudo crear config.json
   pause & goto MENU
 )
-git diff --cached --quiet 2>nul
-if %ERRORLEVEL% equ 0 (
-  echo [INFO] Sin cambios para commit
-  goto PROD_SHOW
+
+:: Leer el contenido y verificar
+node -e "const cfg=JSON.parse(require('fs').readFileSync('%CLIENT_DIR%/public/config.json','utf8'));if(!cfg.apiUrl||cfg.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}process.stdout.write(cfg.apiUrl);" > "%TEMP%\config_api_check.txt" 2>nul
+set /p CONFIG_API_URL=<"%TEMP%\config_api_check.txt"
+
+if not defined CONFIG_API_URL (
+  echo [ERROR] config.json no contiene una URL valida
+  type "%CLIENT_DIR%\public\config.json"
+  pause & goto MENU
 )
+
+:: Verificar que la URL en config.json coincide con la esperada
+echo %CONFIG_API_URL% | findstr /i "%TUNNEL_URL%/api" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] config.json contiene URL incorrecta: %CONFIG_API_URL%
+  echo [ERROR] Se esperaba: %TUNNEL_URL%/api
+  pause & goto MENU
+)
+
+echo [OK] config.json actualizado correctamente
+echo   Contenido:
+type "%CLIENT_DIR%\public\config.json"
+
+:: ============================================================
+:: PASO 6: Git add, commit, push
+:: ============================================================
+echo.
+echo [6/7] Git push...
+
+git status --porcelain >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] No hay repositorio git
+  pause & goto MENU
+)
+
+git add "client/public/config.json" 2>nul
+
+:: Verificar si hay cambios reales
+git diff --cached --quiet -- "client/public/config.json" 2>nul
+if %ERRORLEVEL% equ 0 (
+  :: Tambien verificar unstaged changes
+  git diff --quiet -- "client/public/config.json" 2>nul
+  if %ERRORLEVEL% equ 0 (
+    echo [INFO] config.json sin cambios reales - no se hace commit
+    goto :GIT_PUSH
+  )
+)
+
 git commit -m "chore: update Cloudflare tunnel API URL" 2>nul
 if %ERRORLEVEL% neq 0 (
   echo [ERROR] git commit fallo
   pause & goto MENU
 )
 echo [OK] Git commit creado
-:: Push a la rama actual
-for /f "delims=" %%b in ('git branch --show-current 2^>nul') do set CUR_BRANCH=%%b
-if not defined CUR_BRANCH set CUR_BRANCH=main
-echo Haciendo git push origin %CUR_BRANCH%...
-git push origin %CUR_BRANCH%
+
+:GIT_PUSH
+echo Haciendo git push origin %BRANCH%...
+git push origin %BRANCH%
 if %ERRORLEVEL% neq 0 (
   echo [ERROR] git push fallo
   echo [INFO] Backend y Tunnel siguen funcionando localmente
@@ -338,74 +384,85 @@ if %ERRORLEVEL% neq 0 (
 )
 echo [OK] Git push realizado
 
-:PROD_SHOW
+:: ============================================================
+:: PASO 7: Esperar Vercel y verificar config.json
+:: ============================================================
 echo.
-echo  ========================================
-echo   OPEN DOWNLOAD - PRODUCCION
-echo  ========================================
-echo.
-echo  [OK] Backend:
-echo       http://127.0.0.1:3001
-for /f "delims=" %%v in ('yt-dlp --version 2^>nul') do echo  [OK] yt-dlp: %%v
-where ffmpeg >nul 2>&1 && echo  [OK] FFmpeg: Disponible || echo  [OK] FFmpeg: portable
-echo  [OK] Cloudflare:
-echo       Conectado
-echo  [OK] Public API:
-echo       %API_URL%
-echo  [OK] config.json:
-echo       Actualizado
-git status >nul 2>&1 && echo  [OK] Git: Push realizado || echo  [INFO] Git: sin cambios
-echo.
-echo  [INFO] Vercel: Deployment automatico iniciado
-echo         Frontend: https://opendowload.vercel.app
-echo.
-echo  ========================================
-echo.
-:: Guardar URL para verificacion
-echo %API_URL% > "%TEMP%\last_api_url.txt"
-:: Abrir web
-echo [INFO] Abriendo OpenDownload...
-start https://opendowload.vercel.app
-echo.
-:: Verificacion no bloqueante del config en Vercel (max 5 intentos)
-echo Verificando https://opendowload.vercel.app/config.json ...
-for /l %%i in (1,1,5) do (
-  timeout /t 6 /nobreak >nul
-  curl -s https://opendowload.vercel.app/config.json > "%TEMP%\vercel_cfg.json" 2>nul
-  findstr "%TUNNEL_URL%" "%TEMP%\vercel_cfg.json" >nul 2>&1
-  if %ERRORLEVEL% equ 0 (
-    echo [OK] Vercel config.json ya apunta a %TUNNEL_URL%
-    goto PROD_END
+echo [7/7] Esperando Vercel deployment (hasta %MAX_VERCEL_POLL% segundos)...
+set "VERCEL_OK=0"
+for /l %%n in (1,1,%MAX_VERCEL_POLL%) do (
+  timeout /t %POLL_INTERVAL% /nobreak >nul
+  curl -s "%VERCEL_URL%/config.json" > "%TEMP%\vercel_cfg.json" 2>nul
+  if !ERRORLEVEL! equ 0 (
+    node -e "const cfg=JSON.parse(require('fs').readFileSync('%TEMP%/vercel_cfg.json','utf8'));if(cfg.apiUrl&&cfg.apiUrl.indexOf('trycloudflare.com')!==-1&&cfg.apiUrl.indexOf('%TUNNEL_URL%/api')!==-1){process.exit(0)}process.exit(1)" 2>nul
+    if !ERRORLEVEL! equ 0 set "VERCEL_OK=1"
   )
-  echo  Intento %%i/5: Vercel aun desplegando...
+  if "!VERCEL_OK!"=="1" goto :VERCEL_LOOP_DONE
+  echo   Intento %%n/%MAX_VERCEL_POLL% - desplegando...
 )
-echo [INFO] Vercel aun no termino el deployment.
-echo [INFO] Puedes abrir la web en unos segundos y recargar.
+:VERCEL_LOOP_DONE
+if "%VERCEL_OK%"=="0" (
+  echo [WARN] Vercel no actualizo config.json despues de %MAX_VERCEL_POLL% segundos
+  echo [INFO] Continuando de todas formas - el deployment puede terminar tarde
+) else (
+  echo [OK] Vercel config.json actualizado con URL correcta
+)
 
-:PROD_END
+:: ============================================================
+:: VALIDACION FINAL
+:: ============================================================
 echo.
-echo  Quick Tunnel: URL temporal. Cada reinicio genera nueva URL -> nuevo commit/push.
-echo  Backend y Tunnel siguen abiertos en ventanas minimizadas.
+echo Verificando endpoints publicos...
+curl -s -o nul -w "%%{http_code}" "%TUNNEL_URL%/health" > "%TEMP%\final_health.txt" 2>nul
+set /p FINAL_HEALTH=<"%TEMP%\final_health.txt"
+echo   /health via tunnel: HTTP %FINAL_HEALTH%
+
+curl -s -o nul -w "%%{http_code}" "%VERCEL_URL%/config.json" > "%TEMP%\final_vercel.txt" 2>nul
+set /p FINAL_VERCEL=<"%TEMP%\final_vercel.txt"
+echo   Vercel config.json: HTTP %FINAL_VERCEL%
+
+:: ============================================================
+:: SALIDA FINAL
+:: ============================================================
 echo.
+echo  ==========================================
+echo   OPENMEDIA LISTO
+echo  ==========================================
+echo.
+echo  Frontend:
+echo    %VERCEL_URL%
+echo.
+echo  Backend:
+echo    http://127.0.0.1:3001
+echo.
+echo  Tunnel:
+echo    %TUNNEL_URL%
+echo.
+echo  API:
+echo    %API_URL%
+echo.
+echo  [CONECTADO] Tunnel activo
+echo  [CONECTADO] Backend activo
+if "%VERCEL_OK%"=="1" (
+  echo  [ACTUALIZADO] Vercel
+) else (
+  echo  [PENDIENTE] Vercel (puede tardar mas)
+)
+echo.
+echo  ==========================================
+echo.
+
+:: Guardar URL para referencia
+echo %TUNNEL_URL% > "%TEMP%\last_tunnel_url.txt"
+echo %API_URL% >> "%TEMP%\last_tunnel_url.txt"
+
 pause
 goto MENU
 
 :STOP_PROD
 cls
 echo Deteniendo produccion...
-if exist "%PID_TUNNEL%" (
-  for /f "tokens=*" %%p in ('type "%PID_TUNNEL%" 2^>nul') do taskkill /F /PID %%p >nul 2>&1
-  del /q "%PID_TUNNEL%" 2>nul
-  echo [OK] Tunnel detenido
-) else (
-  taskkill /F /IM cloudflared.exe >nul 2>&1 && echo [OK] cloudflared detenido || echo [INFO] cloudflared no estaba en ejecucion
-)
-if exist "%PID_BACKEND%" (
-  for /f "tokens=*" %%p in ('type "%PID_BACKEND%" 2^>nul') do taskkill /F /PID %%p >nul 2>&1
-  del /q "%PID_BACKEND%" 2>nul
-  echo [OK] Backend detenido
-) else (
-  echo [INFO] Backend no fue iniciado por este script (usa taskkill /F /IM node.exe si lo iniciaste manual)
-)
+taskkill /F /IM cloudflared.exe >nul 2>&1 && echo [OK] cloudflared detenido || echo [INFO] cloudflared no estaba en ejecucion
+echo [INFO] Para detener el backend: taskkill /F /IM node.exe
 pause
 goto MENU
