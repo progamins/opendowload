@@ -5,7 +5,6 @@ color 0A
 
 set "PROJECT_ROOT=%~dp0"
 set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
-set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
 set "SERVER_DIR=%PROJECT_ROOT%\server"
 set "CLIENT_DIR=%PROJECT_ROOT%\client"
 set "CLOUDFLARED_EXE=%PROJECT_ROOT%\tools\cloudflared.exe"
