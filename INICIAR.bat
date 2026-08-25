@@ -310,22 +310,24 @@ echo.
 echo [5/7] Actualizando config.json...
 if not exist "%CLIENT_DIR%\public" mkdir "%CLIENT_DIR%\public"
 
-:: Usar Node.js para escribir JSON valido
-node -e "const fs=require('fs');const cfg={apiUrl:'%API_URL%'};fs.writeFileSync('%CLIENT_DIR%/public/config.json',JSON.stringify(cfg,null,2)+String.fromCharCode(10));" 2>nul
+:: Usar Node.js para escribir JSON valido (sin depender de paths de Windows)
+node -e "const fs=require('fs'),p=require('path');const dir=p.join(process.cwd(),'client','public');fs.mkdirSync(dir,{recursive:true});const cfg={apiUrl:'%API_URL%'};fs.writeFileSync(p.join(dir,'config.json'),JSON.stringify(cfg,null,2)+String.fromCharCode(10));console.log('OK:'+p.join(dir,'config.json'))"
 
 :: Verificar que se escribio correctamente
-if not exist "%CLIENT_DIR%\public\config.json" (
-  echo [ERROR] No se pudo crear config.json
-  pause & goto MENU
-)
+node -e "const fs=require('fs'),p=require('path');const f=p.join(process.cwd(),'client','public','config.json');try{const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.apiUrl||c.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}console.log('URL:'+c.apiUrl)}catch(e){process.exit(1)}" > "%TEMP%\config_api_check.txt" 2>&1
+set /p CONFIG_CHECK=<"%TEMP%\config_api_check.txt"
 
-:: Leer el contenido y verificar
-node -e "const cfg=JSON.parse(require('fs').readFileSync('%CLIENT_DIR%/public/config.json','utf8'));if(!cfg.apiUrl||cfg.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}process.stdout.write(cfg.apiUrl);" > "%TEMP%\config_api_check.txt" 2>nul
-set /p CONFIG_API_URL=<"%TEMP%\config_api_check.txt"
+set "CONFIG_API_URL="
+echo %CONFIG_CHECK% | findstr "^URL:" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+  for /f "tokens=2 delims=:" %%U in ("%CONFIG_CHECK%") do set "CONFIG_API_URL=%%U"
+)
 
 if not defined CONFIG_API_URL (
   echo [ERROR] config.json no contiene una URL valida
   type "%CLIENT_DIR%\public\config.json"
+  echo.
+  echo [DEBUG] Node output: %CONFIG_CHECK%
   pause & goto MENU
 )
 
