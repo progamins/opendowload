@@ -135,7 +135,7 @@ if %ERRORLEVEL% neq 0 (
 )
 echo [3/3] Iniciando Vite+Express http://127.0.0.1:5173 http://127.0.0.1:3001
 echo       (Deja esta ventana abierta - Ctrl+C para detener)
-npm run dev
+call npm run dev
 echo.
 echo [INFO] Servidor detenido. Codigo: %ERRORLEVEL%
 pause
