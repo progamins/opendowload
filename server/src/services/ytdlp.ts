@@ -127,18 +127,24 @@ function toFormatOptions(rawFormats: RawFormat[]): {
 }
 
 export async function analyzeUrl(url: string): Promise<MediaInfo> {
-  const stdout = await run(
-    [
-      "-J",
-      "--no-warnings",
-      "--skip-download",
-      "--no-playlist",
-      "--extractor-args",
-      "youtube:player_client=android,web",
-      url,
-    ],
-    60_000
-  );
+  let stdout: string;
+  try {
+    stdout = await run(
+      ["-J", "--no-warnings", "--skip-download", "--no-playlist", url],
+      60_000
+    );
+  } catch (e: any) {
+    const msg = String(e?.stderr ?? e?.message ?? "");
+    if (msg.toLowerCase().includes("sign in to confirm") || msg.toLowerCase().includes("not a bot")) {
+      // Retry con cliente android para bypass bot
+      stdout = await run(
+        ["-J", "--no-warnings", "--skip-download", "--no-playlist", "--extractor-args", "youtube:player_client=android,web", url],
+        60_000
+      );
+    } else {
+      throw e;
+    }
+  }
   const data = JSON.parse(stdout);
 
   const isPlaylist = data._type === "playlist";
@@ -209,8 +215,6 @@ export function startDownload(params: {
     "--newline",
     "--no-warnings",
     "--no-playlist",
-    "--extractor-args",
-    "youtube:player_client=android,web",
     "--ffmpeg-location",
     config.ffmpegPath,
     "-f",

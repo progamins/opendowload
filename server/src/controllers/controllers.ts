@@ -133,28 +133,43 @@ export function downloadController(req: Request, res: Response): void {
     return;
   }
 
-  const validFormats = kind === "audio" ? info.audioFormats : info.videoFormats;
-  const formatExists = validFormats.some((f) => f.formatId === formatId);
-  if (!formatExists) {
-    res.status(400).json({ message: "El formato seleccionado ya no está disponible." });
-    return;
-  }
-
+  // Normalizar extensión y corregir kind si es inconsistente (ej: video con mp3)
   const ALLOWED_AUDIO_EXT = new Set(["mp3", "m4a", "opus", "wav"]);
   const ALLOWED_VIDEO_EXT = new Set(["mp4", "webm"]);
-  const allowedSet = kind === "audio" ? ALLOWED_AUDIO_EXT : ALLOWED_VIDEO_EXT;
-  if (!allowedSet.has(targetExt)) {
-    res.status(400).json({ message: "Formato de salida no soportado." });
+  const ALL_ALLOWED = new Set([...ALLOWED_AUDIO_EXT, ...ALLOWED_VIDEO_EXT]);
+  const normalizedExt = String(targetExt).trim().toLowerCase().replace(/^\./, "");
+  if (!ALL_ALLOWED.has(normalizedExt)) {
+    logger.error(`download invalid ext: kind=${kind} targetExt=${targetExt} normalized=${normalizedExt} body=${JSON.stringify(body).slice(0,600)}`);
+    res.status(400).json({ message: `Formato de salida no soportado: "${targetExt}". Usa ${[...ALL_ALLOWED].join(", ")}.` });
     return;
+  }
+  let effectiveKind: typeof kind = kind;
+  if (ALLOWED_AUDIO_EXT.has(normalizedExt) && !ALLOWED_VIDEO_EXT.has(normalizedExt)) effectiveKind = "audio";
+  else if (ALLOWED_VIDEO_EXT.has(normalizedExt) && !ALLOWED_AUDIO_EXT.has(normalizedExt)) effectiveKind = "video";
+  (body as any).kind = effectiveKind;
+
+  const validFormats = effectiveKind === "audio" ? info.audioFormats : info.videoFormats;
+  const formatExists = validFormats.some((f) => f.formatId === formatId);
+  if (!formatExists) {
+    // Si el formato no existe en el kind corregido, probar el otro kind (para compatibilidad)
+    const otherFormats = effectiveKind === "audio" ? info.videoFormats : info.audioFormats;
+    const otherExists = otherFormats.some((f) => f.formatId === formatId);
+    if (!otherExists) {
+      res.status(400).json({ message: "El formato seleccionado ya no está disponible." });
+      return;
+    }
+    // Si existe en el otro, usar ese kind
+    effectiveKind = effectiveKind === "audio" ? "video" : "audio";
+    (body as any).kind = effectiveKind;
   }
 
   try {
     const record = enqueueDownload(
       {
         url,
-        kind,
+        kind: effectiveKind,
         formatId,
-        targetExt,
+        targetExt: normalizedExt,
         embedThumbnail: Boolean(embedThumbnail),
         audioQuality: audioQuality ? String(audioQuality) : undefined,
         customSubdir: customSubdir ? String(customSubdir).trim() : undefined,
