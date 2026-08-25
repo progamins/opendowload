@@ -29,12 +29,13 @@ function userMessage(err: unknown): { message: string; technical: string } {
   };
 }
 
-/** Strip playlist params (&list=, &index=) from a YouTube URL */
+/** Strip playlist params (&list=, &index=, &start_radio=) from a YouTube URL */
 function stripPlaylistParams(url: string): string {
   try {
     const u = new URL(url);
     u.searchParams.delete("list");
     u.searchParams.delete("index");
+    u.searchParams.delete("start_radio");
     return u.toString();
   } catch {
     return url;

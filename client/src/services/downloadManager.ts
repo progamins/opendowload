@@ -147,10 +147,14 @@ class DownloadManager {
 
   private humanizeError(msg: string): string {
     if (msg.includes("Failed to fetch") || msg.includes("No se pudo conectar")) return "El servidor no pudo preparar esta descarga. Verifica que el backend esté en ejecución.";
-    if (msg.toLowerCase().includes("sign in to confirm") || msg.toLowerCase().includes("not a bot")) return "YouTube pide verificación anti-bot para este video. Prueba otro enlace (ej: https://www.youtube.com/watch?v=dQw4w9WgXcQ), actualiza yt-dlp o reintenta en unos minutos.";
+    if (msg.toLowerCase().includes("sign in to confirm") || msg.toLowerCase().includes("not a bot")) return "YouTube pide verificación anti-bot para este video. Prueba otro enlace más popular, actualiza yt-dlp (pip install -U yt-dlp) o reintenta en unos minutos.";
     if (msg.includes("isSupportedUrl") || msg.includes("no es válido")) return "El enlace no es válido.";
     if (msg.includes("No se pudo obtener")) return "No se pudo obtener información del vídeo. Puede ser privado o no disponible.";
-    if (msg.includes("429")) return "Se alcanzó el límite de descargas simultáneas (2). Espera o cancela una.";
+    if (msg.includes("429") || msg.includes("Too Many Requests")) return "YouTube está limitando solicitudes. Espera 1-2 minutos y reintenta.";
+    if (msg.includes("This video is not available")) return "Este video no está disponible (puede ser privado o eliminado).";
+    if (msg.includes("timed out")) return "La operación tardó demasiado. Reintenta en unos segundos.";
+    if (msg.includes("Timeout esperando")) return "El servidor tardó demasiado en responder. Verifica que el backend y el tunnel estén activos.";
+    if (msg.includes("yt-dlp exited with code")) return "Error al descargar. YouTube puede estar bloqueando las peticiones. Espera 1-2 minutos y reintenta.";
     return msg;
   }
 
@@ -311,7 +315,10 @@ class DownloadManager {
         // Reset backoff on success
         delay = 1000;
         if (rec.status === "completed") return rec;
-        if (rec.status === "error" || rec.status === "cancelled") throw new Error(rec.errorMessage ?? "Error en servidor");
+        if (rec.status === "error" || rec.status === "cancelled") {
+          const errMsg = rec.errorMessage ?? "Error en servidor";
+          throw new Error(errMsg);
+        }
         const task = this.tasks.find((t) => t.backendId === backendId);
         if (task && rec) {
           this.update(task.id, { progress: rec.progress ?? 0, speed: rec.speed, eta: rec.eta, totalBytes: rec.fileSize ?? null });
