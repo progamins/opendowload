@@ -64,12 +64,22 @@ export default function App() {
         {tab === "download" && (
           <div className="space-y-8">
             <div className="mx-auto max-w-2xl text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/20">🎵</div>
-              <h2 className="font-display text-3xl font-black tracking-tight text-ink-50">Descarga tu música</h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-400">Descarga hasta <span className="font-bold text-amber-400">2 canciones simultáneamente</span> directamente a tu dispositivo.</p>
-              <p className={`mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${supportsFS ? "bg-teal-500/15 text-teal-400" : "bg-amber-500/15 text-amber-400"}`}>
-                {supportsFS ? "✓ Tu navegador permite elegir carpeta nativa" : "Tu navegador usará descarga estándar (fallback)"}
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-amber-500 via-amber-500 to-amber-600 text-white shadow-xl shadow-amber-500/25 ring-1 ring-white/10">
+                <Music2 size={24} strokeWidth={2} />
+              </div>
+              <h2 className="font-display text-4xl font-black tracking-tighter text-ink-50">
+                Descarga tu <span className="bg-gradient-to-r from-amber-400 to-amber-500 bg-clip-text text-transparent">música</span>
+              </h2>
+              <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-ink-400">
+                Gestor profesional hasta <span className="font-bold text-ink-200">2 canciones simultáneas</span> — elige la carpeta con el explorador nativo y guarda directo en tu PC.
               </p>
+              <div className="mt-4 flex justify-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ring-1 ${supportsFS ? "bg-teal-500/10 text-teal-400 ring-teal-500/20" : "bg-amber-500/10 text-amber-400 ring-amber-500/20"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${supportsFS ? "bg-teal-500" : "bg-amber-500"} animate-pulse`} />
+                  {supportsFS ? "Explorador nativo listo" : "Fallback estándar activo"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-black text-graphite-900">MAX 2</span>
+              </div>
             </div>
 
             <div className="mx-auto max-w-2xl space-y-4 rounded-[24px] border border-white/[0.06] bg-graphite-800/80 p-5 shadow-2xl backdrop-blur">
