@@ -1,4 +1,4 @@
-import { Plus, Download, History, Settings, Music2 } from "lucide-react";
+import { Plus, Download, History, Settings, Music2, MessageCircle } from "lucide-react";
 
 type Tab = "download" | "history" | "settings";
 
@@ -54,11 +54,18 @@ export function Sidebar({ tab, activeDownloads, onTabChange, onNewDownload }: Si
           </button>
         </nav>
 
-        <div className="p-4">
+        <div className="space-y-3 p-4">
           <div className="rounded-2xl bg-gradient-to-br from-amber-500/15 to-teal-500/10 p-4 ring-1 ring-white/[0.06]">
             <p className="text-xs font-bold text-ink-50">Hasta 2 simultáneas</p>
             <p className="mt-1 text-xs leading-relaxed text-ink-400">Pega 1 o 2 URLs. Elige calidad y guarda donde quieras.</p>
           </div>
+          <a href="https://wa.me/506902568187" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-2xl bg-teal-500/10 p-3 ring-1 ring-teal-500/20 hover:bg-teal-500/20 transition">
+            <MessageCircle size={16} className="shrink-0 text-teal-400" />
+            <div>
+              <p className="text-xs font-bold text-teal-300">Contáctame para tener la API</p>
+              <p className="text-[10px] text-ink-400">WhatsApp: 9025 68187</p>
+            </div>
+          </a>
         </div>
       </aside>
 
@@ -68,6 +75,7 @@ export function Sidebar({ tab, activeDownloads, onTabChange, onNewDownload }: Si
         <button onClick={() => onTabChange("download")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "download" ? "bg-white text-graphite-950" : "text-ink-400"}`}><Download size={16} /><span className="text-[10px] font-bold">Descargas</span></button>
         <button onClick={() => onTabChange("history")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "history" ? "bg-white text-graphite-950" : "text-ink-400"}`}><History size={16} /><span className="text-[10px] font-bold">Historial</span></button>
         <button onClick={() => onTabChange("settings")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "settings" ? "bg-white text-graphite-950" : "text-ink-400"}`}><Settings size={16} /><span className="text-[10px] font-bold">Ajustes</span></button>
+        <a href="https://wa.me/506902568187" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-teal-400"><MessageCircle size={16} /><span className="text-[10px] font-bold">API</span></a>
       </nav>
     </>
   );
