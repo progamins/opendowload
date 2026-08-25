@@ -8,15 +8,8 @@ set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
 set "SERVER_DIR=%PROJECT_ROOT%\server"
 set "CLIENT_DIR=%PROJECT_ROOT%\client"
 set "CLOUDFLARED_EXE=%PROJECT_ROOT%\tools\cloudflared.exe"
-set "CLOUDFLARED=cloudflared"
 set "CF_LOG=%TEMP%\openmedia-cloudflared.log"
-set "PID_BACKEND=%TEMP%\openmedia_backend.pid"
-set "PID_TUNNEL=%TEMP%\openmedia_tunnel.pid"
-set "VERCEL_URL=https://opendowload.vercel.app"
 set "MAX_TUNNEL_WAIT=60"
-set "MAX_HEALTH_CHECK=30"
-set "MAX_VERCEL_POLL=40"
-set "POLL_INTERVAL=5"
 
 :MENU
 cls
@@ -25,25 +18,24 @@ echo  ==========================================
 echo    OpenMedia Downloader - INICIO
 echo  ==========================================
 echo    [1] Desarrollo       (Vite + Express)
-echo    [2] Produccion       (Express + Tunnel + Vercel)
+echo    [2] Produccion       (Express + Tunnel)
 echo    [3] Diagnostico
 echo    [4] Detener produccion
 echo    [5] Salir
 echo  ==========================================
 echo.
-:GETCHOICE
 set /p "OPC=Elige [1-5]: "
 if "%OPC%"=="1" goto DEV
 if "%OPC%"=="2" goto PROD
 if "%OPC%"=="3" goto DIAG
 if "%OPC%"=="4" goto STOP_PROD
 if "%OPC%"=="5" exit
-goto GETCHOICE
+goto MENU
 
 :CHECKS
 where node >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-  echo [ERROR] Node no encontrado - https://nodejs.org
+  echo [ERROR] Node no encontrado
   exit /b 1
 )
 for /f "delims=" %%v in ('node -v') do echo [OK] Node %%v
@@ -53,30 +45,25 @@ where yt-dlp >nul 2>&1
 if %ERRORLEVEL% equ 0 (
   for /f "delims=" %%v in ('yt-dlp --version') do echo [OK] yt-dlp %%v
 ) else (
-  echo [ERROR] yt-dlp no encontrado - pip install -U yt-dlp
+  echo [ERROR] yt-dlp no encontrado
   exit /b 1
 )
-where ffmpeg >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  echo [OK] ffmpeg
+if exist "%PROJECT_ROOT%\tools\ffmpeg\ffmpeg.exe" (
+  echo [OK] ffmpeg portable
 ) else (
-  if exist "%PROJECT_ROOT%\tools\ffmpeg\ffmpeg.exe" (
-    echo [OK] ffmpeg portable
+  where ffmpeg >nul 2>&1
+  if %ERRORLEVEL% equ 0 (
+    echo [OK] ffmpeg
   ) else (
     echo [ERROR] FFmpeg no encontrado
     exit /b 1
   )
 )
 if exist "%CLOUDFLARED_EXE%" (
-  echo [OK] cloudflared %CLOUDFLARED_EXE%
+  echo [OK] cloudflared
 ) else (
-  where %CLOUDFLARED% >nul 2>&1
-  if %ERRORLEVEL% equ 0 (
-    echo [OK] cloudflared
-  ) else (
-    echo [ERROR] cloudflared no encontrado
-    exit /b 1
-  )
+  echo [ERROR] cloudflared no encontrado
+  exit /b 1
 )
 exit /b 0
 
@@ -85,53 +72,24 @@ cls
 echo === DIAGNOSTICO ===
 call :CHECKS
 if %ERRORLEVEL% neq 0 (
-  echo.
-  echo [ERROR] Faltan dependencias, no se puede continuar
+  echo [ERROR] Faltan dependencias
   pause
   goto MENU
 )
-if exist "%SERVER_DIR%\.env" (echo [OK] server\.env) else echo [FALTA] server\.env
-if exist "%CLIENT_DIR%\.env" (echo [OK] client\.env) else echo [FALTA] client\.env
-if exist "%PROJECT_ROOT%\tools\ffmpeg\ffmpeg.exe" (echo [OK] ffmpeg portable) else echo [INFO] ffmpeg global
-netstat -ano | findstr ":3001" | findstr "LISTENING" >nul
-if %ERRORLEVEL% equ 0 (echo [OCUPADO] :3001 LISTENING) else echo [LIBRE] :3001
-curl -s http://127.0.0.1:3001/health >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  echo [OK] API
-  curl -s http://127.0.0.1:3001/health
-  echo.
-) else (
-  echo [OFF] API no responde - inicia con [1] o [2]
-)
+curl -s http://127.0.0.1:3001/health 2>nul
+echo.
 pause
 goto MENU
 
 :DEV
 cls
-echo === DESARROLLO (Vite + Express) ===
+echo === DESARROLLO ===
 call :CHECKS
 if %ERRORLEVEL% neq 0 pause & goto MENU
-if not exist "%SERVER_DIR%\.env" copy "%SERVER_DIR%\.env.example" "%SERVER_DIR%\.env" >nul
-if not exist "%CLIENT_DIR%\.env" copy "%CLIENT_DIR%\.env.example" "%CLIENT_DIR%\.env" >nul
-echo [1/3] Verificando deps...
-echo [OK] Dependencias verificadas
-echo [2/3] Construyendo...
-call npm run build --prefix "%SERVER_DIR%" 2>&1 | findstr /i "error" >nul
-if %ERRORLEVEL% equ 0 (
-  echo [ERROR] Error en build server
-  pause & goto MENU
-)
-call npm run build --prefix "%CLIENT_DIR%" 2>&1 | findstr /i "error" >nul
-if %ERRORLEVEL% equ 0 (
-  echo [ERROR] Error en build client
-  pause & goto MENU
-)
-echo [OK] Build completado
-echo [3/3] Iniciando Vite+Express http://127.0.0.1:5173 http://127.0.0.1:3001
+if not exist "%SERVER_DIR%\.env" copy "%SERVER_DIR%\.env.example" "%SERVER_DIR%\.env" >nul 2>&1
 call npm run dev
-echo.
-echo [INFO] Servidor detenido. Codigo: %ERRORLEVEL%
-pausegoto MENU
+pause
+goto MENU
 
 :PROD
 cls
@@ -147,15 +105,10 @@ if not exist "%SERVER_DIR%\.env" (
   echo HOST=127.0.0.1> "%SERVER_DIR%\.env"
   echo PORT=3001>> "%SERVER_DIR%\.env"
   echo FFMPEG_PATH=../tools/ffmpeg/ffmpeg.exe>> "%SERVER_DIR%\.env"
-  echo [OK] server\.env creado con FFMPEG_PATH
+  echo [OK] server\.env creado
 )
 
 :: Git info
-for /f "delims=" %%r in ('git remote 2^>nul') do set "HAS_REMOTE=%%r"
-if not defined HAS_REMOTE (
-  echo [ERROR] No hay remote Git configurado.
-  pause & goto MENU
-)
 for /f "delims=" %%b in ('git branch --show-current 2^>nul') do set "BRANCH=%%b"
 if not defined BRANCH set "BRANCH=main"
 echo [OK] Rama %BRANCH%
@@ -214,7 +167,7 @@ for /l %%k in (1,1,%MAX_TUNNEL_WAIT%) do (
   for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$log = Get-Content -Path '%CF_LOG%' -ErrorAction SilentlyContinue; if ($log) { $m = [regex]::Matches($log -join [Environment]::NewLine, 'https://[a-zA-Z0-9][a-zA-Z0-9-]+\.trycloudflare\.com'); if ($m.Count -gt 0) { Write-Output $m[$m.Count - 1].Value } }"`) do (
     set "TUNNEL_URL=%%A"
   )
-  if defined TUNNEL_URL goto :TUNNEL_OK
+  if defined TUNNEL_URL goto TUNNEL_OK
   timeout /t 1 /nobreak >nul
   if %%k==15 echo   ...esperando
   if %%k==30 echo   ...todavia buscando
@@ -229,23 +182,23 @@ echo [OK] Tunnel: %TUNNEL_URL%
 
 :: Validar health via tunnel
 set "API_URL=%TUNNEL_URL%/api"
-set "TUNNEL_OK=0"
+set "TUNNEL_HEALTH_OK=0"
 for /l %%m in (1,1,10) do (
   curl -s -o nul -w "%%{http_code}" "%TUNNEL_URL%/health" > "%TEMP%\thc.txt" 2>nul
   set /p HC=<"%TEMP%\thc.txt"
-  if "!HC!"=="200" set "TUNNEL_OK=1"
-  if "!TUNNEL_OK!"=="1" goto :TUNNEL_HEALTH_DONE
+  if "!HC!"=="200" set "TUNNEL_HEALTH_OK=1"
+  if "!TUNNEL_HEALTH_OK!"=="1" goto TUNNEL_HEALTH_DONE
   timeout /t 3 /nobreak >nul
 )
 :TUNNEL_HEALTH_DONE
-if "%TUNNEL_OK%"=="0" (
+if "%TUNNEL_HEALTH_OK%"=="0" (
   echo [ERROR] Tunnel no responde /health
   pause & goto MENU
 )
 echo [OK] Tunnel /health HTTP 200
 
 :: ============================================================
-:: PASO 3: Actualizar config.json y deploy
+:: PASO 3: Actualizar config.json
 :: ============================================================
 echo.
 echo [3/3] Actualizando config.json...
@@ -254,16 +207,14 @@ echo.
 type "%CLIENT_DIR%\public\config.json"
 echo.
 
-echo [OK] Config actualizado
-echo.
 echo  ==========================================
 echo   OPENMEDIA LISTO
-  ==========================================
+echo  ==========================================
 echo.
 echo  Backend:  http://127.0.0.1:3001
 echo  Tunnel:  %TUNNEL_URL%
 echo  API:     %API_URL%
-echo  Frontend: %VERCEL_URL%
+echo  Frontend: https://opendowload.vercel.app
 echo.
 echo  ==========================================
 echo.
