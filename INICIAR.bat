@@ -80,21 +80,33 @@ if not exist "tools\ffmpeg\ffmpeg.exe" (
   echo [SETUP] ffmpeg portable...
   powershell -NoProfile -Command "try{New-Item -Path tools\ffmpeg -ItemType Directory -Force|Out-Null;$z='$env:TEMP\ffmpeg.zip';Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $z -UseBasicParsing;Expand-Archive -Path $z -DestinationPath $env:TEMP\ff -Force;$e=Get-ChildItem $env:TEMP\ff -Recurse -Filter ffmpeg.exe|Select -First 1;Copy-Item $e.FullName tools\ffmpeg\ffmpeg.exe -Force;Copy-Item (Join-Path $e.DirectoryName ffprobe.exe) tools\ffmpeg\ffprobe.exe -Force -ErrorAction SilentlyContinue;Write-Host '[OK] ffmpeg'}catch{Write-Host '[ERROR]'}"
 )
-echo [1/3] Deps (paralelo, npm ci si hay lock)...
+echo [1/3] Deps (secuencial, evita carrera tsc)...
 if exist "server\package-lock.json" (
-  start /b cmd /c "npm ci --prefix server >nul 2>&1 && echo [OK] server"
+  echo  Instalando server...
+  call npm ci --prefix server
+  if %ERRORLEVEL% neq 0 call npm install --prefix server
 ) else (
-  start /b cmd /c "npm install --prefix server >nul 2>&1 && echo [OK] server"
+  call npm install --prefix server
 )
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] server deps
+  pause
+  goto MENU
+)
+echo [OK] server
 if exist "client\package-lock.json" (
-  start /b cmd /c "npm ci --prefix client >nul 2>&1 && echo [OK] client"
+  echo  Instalando client...
+  call npm ci --prefix client
+  if %ERRORLEVEL% neq 0 call npm install --prefix client
 ) else (
-  start /b cmd /c "npm install --prefix client >nul 2>&1 && echo [OK] client"
+  call npm install --prefix client
 )
-:WAIT_DEPS
-timeout /t 2 /nobreak >nul
-tasklist | findstr "npm" >nul
-if %ERRORLEVEL% equ 0 goto WAIT_DEPS
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] client deps
+  pause
+  goto MENU
+)
+echo [OK] client
 call npm install >nul 2>&1
 if %ERRORLEVEL% equ 0 echo [OK] root
 echo [2/3] Build...
