@@ -6,6 +6,7 @@ import type { AppSettings, DiagnosticCheck } from "./types";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { ApiConfigBanner } from "./components/ApiConfigBanner";
 
 type Tab = "download" | "history" | "settings";
 
@@ -69,6 +70,7 @@ export default function App() {
         <main className="min-w-0 flex-1 px-4 py-6 pb-20 lg:px-8 lg:py-8">
           {tab === "download" && (
             <div className="mx-auto max-w-[720px] space-y-6">
+              <ApiConfigBanner />
               {/* Hero */}
               <div className="text-center">
                 <h2 className="font-display text-3xl font-black tracking-tighter">Descargar música</h2>
@@ -272,7 +274,7 @@ function CompletedCard({ task }: { task: DownloadTask }) {
 
 function HistoryView() {
   const [list, setList] = useState<any[]>([]);
-  useEffect(() => { fetch("http://127.0.0.1:3001/api/downloads").then((r) => r.json()).then(setList).catch(() => {}); }, []);
+  useEffect(() => { api.listDownloads().then(setList).catch(() => {}); }, []);
   if (list.length === 0) return <div className="mx-auto max-w-[720px] rounded-[20px] border border-dashed border-white/[0.06] p-8 text-center"><HistoryIcon /><p className="mt-3 text-sm font-bold">Tu historial está vacío</p><p className="text-xs text-ink-500">Las canciones que descargues aparecerán aquí.</p></div>;
   return (
     <div className="mx-auto max-w-[720px] space-y-3">
