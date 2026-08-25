@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal
 title OpenMedia Downloader
 color 0A
 
@@ -134,7 +134,10 @@ if %ERRORLEVEL% neq 0 (
   goto MENU
 )
 echo [3/3] Iniciando Vite+Express http://127.0.0.1:5173 http://127.0.0.1:3001
-call npm run dev
+echo       (Deja esta ventana abierta - Ctrl+C para detener)
+npm run dev
+echo.
+echo [INFO] Servidor detenido. Codigo: %ERRORLEVEL%
 pause
 goto MENU
 
