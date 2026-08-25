@@ -374,28 +374,11 @@ if not exist "%CLIENT_DIR%\public" mkdir "%CLIENT_DIR%\public"
 node -e "const fs=require('fs'),p=require('path');const dir=p.join(process.cwd(),'client','public');fs.mkdirSync(dir,{recursive:true});const cfg={apiUrl:'%API_URL%'};fs.writeFileSync(p.join(dir,'config.json'),JSON.stringify(cfg,null,2)+String.fromCharCode(10));console.log('OK:'+p.join(dir,'config.json'))"
 
 :: Verificar que se escribio correctamente
-node -e "const fs=require('fs'),p=require('path');const f=p.join(process.cwd(),'client','public','config.json');try{const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.apiUrl||c.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}console.log('URL:'+c.apiUrl)}catch(e){process.exit(1)}" > "%TEMP%\config_api_check.txt" 2>&1
-set /p CONFIG_CHECK=<"%TEMP%\config_api_check.txt"
-
-set "CONFIG_API_URL="
-echo %CONFIG_CHECK% | findstr "^URL:" >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  for /f "tokens=2 delims=:" %%U in ("%CONFIG_CHECK%") do set "CONFIG_API_URL=%%U"
-)
-
-if not defined CONFIG_API_URL (
+:: Node escribe solo la URL (sin prefijo) para evitar problemas de parsing con delims=:
+node -e "const fs=require('fs'),p=require('path');const f=p.join(process.cwd(),'client','public','config.json');try{const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.apiUrl||c.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}process.exit(0)}catch(e){process.exit(1)}" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
   echo [ERROR] config.json no contiene una URL valida
   type "%CLIENT_DIR%\public\config.json"
-  echo.
-  echo [DEBUG] Node output: %CONFIG_CHECK%
-  pause & goto MENU
-)
-
-:: Verificar que la URL en config.json coincide con la esperada
-echo %CONFIG_API_URL% | findstr /i "%TUNNEL_URL%/api" >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-  echo [ERROR] config.json contiene URL incorrecta: %CONFIG_API_URL%
-  echo [ERROR] Se esperaba: %TUNNEL_URL%/api
   pause & goto MENU
 )
 

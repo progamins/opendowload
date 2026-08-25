@@ -29,6 +29,18 @@ function userMessage(err: unknown): { message: string; technical: string } {
   };
 }
 
+/** Strip playlist params (&list=, &index=) from a YouTube URL */
+function stripPlaylistParams(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("list");
+    u.searchParams.delete("index");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export async function analyzeController(req: Request, res: Response): Promise<void> {
   const rawUrl = req.body?.url;
   const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
@@ -40,10 +52,14 @@ export async function analyzeController(req: Request, res: Response): Promise<vo
     return;
   }
 
-  // Strip playlist params for single-video analysis to avoid timeouts on &list=...
-  // yt-dlp with --no-playlist already ignores it, but we keep the original url for caching
+  // Strip playlist params (&list=, &index=) for single-video analysis
+  // These cause yt-dlp to try handling mix playlists even with --no-playlist
+  const cleanUrl = stripPlaylistParams(url);
+
   try {
-    const info = await analyzeUrl(url);
+    const info = await analyzeUrl(cleanUrl);
+    // Cache with both original and clean URLs so download can find it
+    cacheMediaInfo({ ...info, sourceUrl: url });
     cacheMediaInfo(info);
     res.json(info);
   } catch (err) {
@@ -125,7 +141,12 @@ export function downloadController(req: Request, res: Response): void {
     return;
   }
 
-  const info = getCachedMediaInfo(url);
+  // Try original URL first, then stripped (without &list=, &index=)
+  let info = getCachedMediaInfo(url);
+  if (!info) {
+    const cleanUrl = stripPlaylistParams(url);
+    if (cleanUrl !== url) info = getCachedMediaInfo(cleanUrl);
+  }
   if (!info) {
     res.status(409).json({
       message: "Este enlace debe analizarse de nuevo antes de descargar (la información expiró).",
