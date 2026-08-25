@@ -219,23 +219,26 @@ echo [OK] Backend iniciado http://127.0.0.1:3001
 echo [OK] Backend /health HTTP 200
 
 :: ============================================================
-:: PASO 2: Iniciar Cloudflare Tunnel
+:: PASO 2: Iniciar Cloudflare Tunnel (siempre fresco)
 :: ============================================================
 echo.
 echo [2/7] Iniciando Cloudflare Tunnel...
+:: Matar cloudflared anterior para asegurar tunnel fresco
 tasklist 2>nul | findstr /i "cloudflared" >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-  if not exist "%CLOUDFLARED_EXE%" (
-    echo [ERROR] No se encuentra %CLOUDFLARED_EXE%
-    pause & goto MENU
-  )
-  del /q "%CF_LOG%" 2>nul
-  start "OpenMedia Tunnel" /min cmd /c ""%CLOUDFLARED_EXE%" tunnel --url http://127.0.0.1:3001 --no-autoupdate > "%CF_LOG%" 2>&1"
-  echo Esperando que cloudflared arranque...
-  timeout /t 3 /nobreak >nul
-) else (
-  echo [INFO] cloudflared ya en ejecucion
+if %ERRORLEVEL% equ 0 (
+  echo [INFO] Deteniendo cloudflared anterior...
+  taskkill /F /IM cloudflared.exe >nul 2>&1
+  timeout /t 2 /nobreak >nul
 )
+if not exist "%CLOUDFLARED_EXE%" (
+  echo [ERROR] No se encuentra %CLOUDFLARED_EXE%
+  pause & goto MENU
+)
+del /q "%CF_LOG%" 2>nul
+echo Iniciando cloudflared fresh...
+start "OpenMedia Tunnel" /min cmd /c ""%CLOUDFLARED_EXE%" tunnel --url http://127.0.0.1:3001 --no-autoupdate > "%CF_LOG%" 2>&1"
+echo Esperando que cloudflared arranque...
+timeout /t 5 /nobreak >nul
 
 :: ============================================================
 :: PASO 3: Detectar URL REAL del Quick Tunnel (regex estricta)
@@ -305,20 +308,56 @@ echo [4/7] Validando tunnel publico...
 
 set "API_URL=%TUNNEL_URL%/api"
 
+:: Intentar hasta 10 veces (el tunnel puede tardar en estabilizarse)
 set "TUNNEL_HEALTH_OK=0"
-for /l %%m in (1,1,5) do (
+for /l %%m in (1,1,10) do (
   curl -s -o "%TEMP%\health_tunnel.json" -w "%%{http_code}" "%TUNNEL_URL%/health" > "%TEMP%\health_tunnel_code.txt" 2>nul
   set /p HTTP_CODE=<"%TEMP%\health_tunnel_code.txt"
   if "!HTTP_CODE!"=="200" set "TUNNEL_HEALTH_OK=1"
   if "!TUNNEL_HEALTH_OK!"=="1" goto :TUNNEL_HEALTH_OK_LOOP_DONE
-  echo   Intento %%m/5 - HTTP !HTTP_CODE! - reintentando en 3s...
+  echo   Intento %%m/10 - HTTP !HTTP_CODE! - reintentando en 3s...
   timeout /t 3 /nobreak >nul
 )
 :TUNNEL_HEALTH_OK_LOOP_DONE
 if "%TUNNEL_HEALTH_OK%"=="0" (
-  echo [ERROR] Cloudflare Tunnel detectado pero no responde.
+  echo [WARN] Tunnel no responde, reiniciando cloudflared...
+  taskkill /F /IM cloudflared.exe >nul 2>&1
+  timeout /t 2 /nobreak >nul
+  del /q "%CF_LOG%" 2>nul
+  start "OpenMedia Tunnel" /min cmd /c ""%CLOUDFLARED_EXE%" tunnel --url http://127.0.0.1:3001 --no-autoupdate > "%CF_LOG%" 2>&1"
+  echo Esperando nuevo tunnel...
+  timeout /t 8 /nobreak >nul
+  :: Re-detectar URL
+  set "TUNNEL_URL="
+  for /l %%k in (1,1,30) do (
+    for /f "usebackq delims=" %%A in (`powershell -NoProfile -Command "$log = Get-Content -Path '%CF_LOG%' -ErrorAction SilentlyContinue; if ($log) { $matches = [regex]::Matches($log -join [Environment]::NewLine, 'https://[a-zA-Z0-9][a-zA-Z0-9-]+\.trycloudflare\.com'); if ($matches.Count -gt 0) { Write-Output $matches[$matches.Count - 1].Value } }"`) do (
+      set "TUNNEL_URL=%%A"
+    )
+    if defined TUNNEL_URL goto :TUNNEL_REDETECT_DONE
+    timeout /t 1 /nobreak >nul
+  )
+  :TUNNEL_REDETECT_DONE
+  if not defined TUNNEL_URL (
+    echo [ERROR] No se pudo obtener nueva URL del tunnel
+    pause & goto MENU
+  )
+  echo Nueva URL: !TUNNEL_URL!
+  set "API_URL=!TUNNEL_URL!/api"
+  :: Re-validar con la nueva URL
+  set "TUNNEL_HEALTH_OK=0"
+  for /l %%n in (1,1,5) do (
+    curl -s -o "%TEMP%\health_tunnel.json" -w "%%{http_code}" "!TUNNEL_URL!/health" > "%TEMP%\health_tunnel_code.txt" 2>nul
+    set /p HTTP_CODE=<"%TEMP%\health_tunnel_code.txt"
+    if "!HTTP_CODE!"=="200" set "TUNNEL_HEALTH_OK=1"
+    if "!TUNNEL_HEALTH_OK!"=="1" goto :TUNNEL_HEALTH_OK_LOOP_DONE
+    echo   Re-intento %%n/5 - HTTP !HTTP_CODE!...
+    timeout /t 3 /nobreak >nul
+  )
+)
+if "%TUNNEL_HEALTH_OK%"=="0" (
+  echo [ERROR] Cloudflare Tunnel no responde despues de reinicio.
   echo [ERROR] Tunnel detectado: %TUNNEL_URL%
-  echo [ERROR] /health fallo despues de 5 intentos
+  echo [ERROR] Verifica que cloudflared funcione: cloudflared tunnel --url http://127.0.0.1:3001
   pause & goto MENU
 )
 echo [OK] Public /health HTTP 200
