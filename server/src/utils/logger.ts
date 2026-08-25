@@ -19,6 +19,7 @@ function write(file: string, line: string): void {
 
 export const logger = {
   info: (msg: string) => write("app.log", `INFO  ${msg}`),
+  warn: (msg: string) => write("app.log", `WARN  ${msg}`),
   download: (msg: string) => write("downloads.log", msg),
   error: (msg: string) => {
     write("errors.log", `ERROR ${msg}`);
