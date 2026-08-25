@@ -128,7 +128,15 @@ function toFormatOptions(rawFormats: RawFormat[]): {
 
 export async function analyzeUrl(url: string): Promise<MediaInfo> {
   const stdout = await run(
-    ["-J", "--no-warnings", "--skip-download", "--no-playlist", url],
+    [
+      "-J",
+      "--no-warnings",
+      "--skip-download",
+      "--no-playlist",
+      "--extractor-args",
+      "youtube:player_client=android,web",
+      url,
+    ],
     60_000
   );
   const data = JSON.parse(stdout);
@@ -201,6 +209,8 @@ export function startDownload(params: {
     "--newline",
     "--no-warnings",
     "--no-playlist",
+    "--extractor-args",
+    "youtube:player_client=android,web",
     "--ffmpeg-location",
     config.ffmpegPath,
     "-f",

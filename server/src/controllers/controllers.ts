@@ -50,11 +50,14 @@ export async function analyzeController(req: Request, res: Response): Promise<vo
     const { message, technical } = userMessage(err);
     const stderr = err instanceof YtDlpError ? err.stderr : technical;
     const isTimeout = stderr.includes("timed out") || technical.includes("timed out");
+    const isBot = stderr.toLowerCase().includes("sign in to confirm") || stderr.includes("not a bot") || stderr.includes("Use --cookies");
     logger.error(`analyze failed for ${url}: ${technical} | stderr: ${stderr.slice(0, 2000)}`);
     res.status(422).json({
-      message: isTimeout
-        ? "El análisis tardó demasiado (timeout). Reintenta, o usa el enlace directo del video sin parámetro &list=."
-        : message,
+      message: isBot
+        ? "YouTube está pidiendo verificación anti-bot para este video. Prueba con otro enlace más popular (ej: https://www.youtube.com/watch?v=dQw4w9WgXcQ), actualiza yt-dlp (pip install -U yt-dlp) o reintenta en unos minutos. Si persiste, es una limitación temporal de YouTube."
+        : isTimeout
+          ? "El análisis tardó demasiado (timeout). Reintenta, o usa el enlace directo del video sin parámetro &list=."
+          : message,
       technical: stderr || technical,
     });
   }

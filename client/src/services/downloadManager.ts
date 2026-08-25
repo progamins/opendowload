@@ -147,6 +147,7 @@ class DownloadManager {
 
   private humanizeError(msg: string): string {
     if (msg.includes("Failed to fetch") || msg.includes("No se pudo conectar")) return "El servidor no pudo preparar esta descarga. Verifica que el backend esté en ejecución.";
+    if (msg.toLowerCase().includes("sign in to confirm") || msg.toLowerCase().includes("not a bot")) return "YouTube pide verificación anti-bot para este video. Prueba otro enlace (ej: https://www.youtube.com/watch?v=dQw4w9WgXcQ), actualiza yt-dlp o reintenta en unos minutos.";
     if (msg.includes("isSupportedUrl") || msg.includes("no es válido")) return "El enlace no es válido.";
     if (msg.includes("No se pudo obtener")) return "No se pudo obtener información del vídeo. Puede ser privado o no disponible.";
     if (msg.includes("429")) return "Se alcanzó el límite de descargas simultáneas (2). Espera o cancela una.";
