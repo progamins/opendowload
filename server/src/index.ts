@@ -96,7 +96,7 @@ const rateLimits: Record<string, number> = {
   "/api/analyze": 20,
   "/api/analyze/batch": 10,
   "/api/download": 10,
-  "/api/downloads": 300, // polling de estado, 2 descargas × 1 req/s = 120, margen amplio
+  "/api/downloads": 9999, // polling de estado - sin límite real, solo lectura
   "/api/health": 120,
   "/health": 120,
   default: 60,

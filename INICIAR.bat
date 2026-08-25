@@ -170,6 +170,13 @@ curl -s http://127.0.0.1:3001/health >nul 2>&1
 if %ERRORLEVEL% equ 0 (
   echo [OK] Backend ya responde en http://127.0.0.1:3001 - reutilizando
 ) else (
+  echo Compilando servidor TypeScript...
+  call npm run build --prefix "%SERVER_DIR%" 2>&1
+  if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Build del servidor fallo
+    pause & goto MENU
+  )
+  echo [OK] Build del servidor completado
   echo Iniciando Express backend en http://127.0.0.1:3001...
   if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
   start "OpenMedia Backend" /min cmd /c "npm run start --prefix "%SERVER_DIR%""
