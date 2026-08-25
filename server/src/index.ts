@@ -90,25 +90,33 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 // Rate limiting por endpoint (memoria, suficiente para 1 PC)
+// Aumentado para /downloads/:id (polling) para evitar 429 con 2 descargas simultáneas + backoff
 const rateMap = new Map<string, number[]>();
 const rateLimits: Record<string, number> = {
-  "/api/analyze": 20, // 20/min
+  "/api/analyze": 20,
   "/api/analyze/batch": 10,
   "/api/download": 10,
-  "/api/downloads/:id/cancel": 20,
+  "/api/downloads": 120, // polling de estado, 2 descargas × ~15 req/min = 30, margen 120
+  "/api/health": 120,
+  "/health": 120,
   default: 60,
 };
 app.use((req, res, next) => {
+  // No limitar health checks agresivamente
+  if (req.path === "/health" || req.path === "/api/health") return next();
   const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
-  const key = `${ip}:${req.path}`;
-  const limit = (Object.entries(rateLimits).find(([p]) => req.path.startsWith(p))?.[1] ?? rateLimits.default)!;
+  // Para /api/downloads/:id, agrupar por prefijo para no crear key por id
+  const pathKey = req.path.startsWith("/api/downloads/") ? "/api/downloads" : req.path;
+  const key = `${ip}:${pathKey}`;
+  const limit = (Object.entries(rateLimits).find(([p]) => pathKey.startsWith(p) || req.path.startsWith(p))?.[1] ?? rateLimits.default)!;
   const now = Date.now();
   const arr = rateMap.get(key) ?? [];
   const recent = arr.filter((t) => now - t < 60_000);
   recent.push(now);
   rateMap.set(key, recent);
   if (recent.length > limit) {
-    res.status(429).json({ error: { code: "RATE_LIMITED", message: "Demasiadas solicitudes. Espera un momento." } });
+    res.setHeader("Retry-After", "2");
+    res.status(429).json({ error: { code: "RATE_LIMITED", message: "Demasiadas solicitudes. Espera 2s." } });
     return;
   }
   next();
@@ -160,6 +168,12 @@ app.get("/api/health", async (_req, res) => {
 app.use("/api", router);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("CORS: origin")) {
+    logger.warn(`CORS blocked: ${msg}`);
+    res.status(403).json({ error: { code: "CORS_FORBIDDEN", message: msg } });
+    return;
+  }
   logger.error(`Unhandled error: ${err instanceof Error ? err.stack : String(err)}`);
   res.status(500).json({ message: "Ocurrió un error inesperado en el servidor local." });
 });

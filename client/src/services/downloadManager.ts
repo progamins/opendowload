@@ -299,19 +299,49 @@ class DownloadManager {
 
   private async waitForBackend(backendId: string, signal: AbortSignal): Promise<any | null> {
     const start = Date.now();
-    while (Date.now() - start < 5 * 60 * 1000) {
+    let attempt = 0;
+    let delay = 1000;
+    const maxDelay = 8000;
+    const maxAttempts = 30;
+    while (Date.now() - start < 5 * 60 * 1000 && attempt < maxAttempts) {
       if (signal.aborted) return null;
+      attempt++;
       try {
         const rec: any = await api.getDownload(backendId);
+        // Reset backoff on success
+        delay = 1000;
         if (rec.status === "completed") return rec;
         if (rec.status === "error" || rec.status === "cancelled") throw new Error(rec.errorMessage ?? "Error en servidor");
-        // actualizar progreso espejo
         const task = this.tasks.find((t) => t.backendId === backendId);
         if (task && rec) {
-          this.update(task.id, { progress: rec.progress ?? 0, speed: rec.speed, eta: rec.eta });
+          this.update(task.id, { progress: rec.progress ?? 0, speed: rec.speed, eta: rec.eta, totalBytes: rec.fileSize ?? null });
         }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 1200));
+      } catch (e: any) {
+        // 429: respetar Retry-After y backoff
+        const status = e?.status ?? 0;
+        if (status === 429) {
+          const retryAfter = e?.retryAfter ? Number(e.retryAfter) * 1000 : null;
+          const waitMs = retryAfter && retryAfter > 0 ? Math.min(retryAfter, 10000) : delay;
+          // Si es 429, no contar como intento fallido definitivo, solo esperar
+          await new Promise((r, rej) => {
+            const t = setTimeout(r, waitMs);
+            signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("Aborted")); }, { once: true });
+          }).catch(() => { throw new Error("Aborted"); });
+          delay = Math.min(delay * 1.5, maxDelay);
+          continue;
+        }
+        // Otros errores (404, 500): si es definitivo, lanzar
+        if (status >= 400 && status < 500 && status !== 429) {
+          // 404 puede ser temporal si la descarga aún no existe, reintentar pocas veces
+          if (attempt > 5) throw e;
+        }
+      }
+      // Backoff progresivo
+      await new Promise((r, rej) => {
+        const t = setTimeout(r, delay);
+        signal.addEventListener("abort", () => { clearTimeout(t); rej(new Error("Aborted")); }, { once: true });
+      }).catch(() => { throw new Error("Aborted"); });
+      delay = Math.min(delay * 1.4, maxDelay);
     }
     throw new Error("Timeout esperando al servidor");
   }

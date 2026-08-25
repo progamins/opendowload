@@ -13,16 +13,23 @@ const getBase = () => getApiBaseUrl();
 export class ApiError extends Error {
   technical?: string;
   status?: number;
-  constructor(body: ApiErrorBody, status?: number) {
+  retryAfter?: number;
+  constructor(body: ApiErrorBody, status?: number, retryAfter?: number) {
     super(body.message);
     this.technical = body.technical;
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
-  const base = getBase();
+  let base: string;
+  try {
+    base = getBase();
+  } catch (e: any) {
+    throw new ApiError({ message: e?.message ?? "API no configurada" });
+  }
   try {
     res = await fetch(`${base}${path}`, {
       headers: { "Content-Type": "application/json" },
@@ -49,7 +56,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const errorBody = (body as ApiErrorBody) ?? { message: `Error ${res.status} del servidor.` };
-    throw new ApiError(errorBody, res.status);
+    const retryAfter = res.headers.get("Retry-After") ? Number(res.headers.get("Retry-After")) : undefined;
+    // Mensaje humano para 429
+    if (res.status === 429) {
+      errorBody.message = (errorBody as any)?.error?.message ?? errorBody.message ?? "El servidor está limitando solicitudes. Espera unos segundos.";
+    }
+    throw new ApiError(errorBody, res.status, retryAfter);
   }
 
   return body as T;

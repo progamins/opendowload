@@ -17,7 +17,7 @@ function normalizeBase(url: string): string {
 }
 
 export function getApiBaseUrl(): string {
-  // 1) Runtime (inyectado vía public/config.json o window.__API_URL)
+  // 1) Runtime (inyectado vía public/config.json o window.__API_URL) — tiene prioridad para Quick Tunnel dinámico
   const runtime = typeof window !== "undefined" ? window.__API_URL : undefined;
   if (runtime && runtime.trim()) return normalizeBase(runtime);
 
@@ -25,9 +25,16 @@ export function getApiBaseUrl(): string {
   const vite = (import.meta as any).env?.VITE_API_URL as string | undefined;
   if (vite && vite.trim()) return normalizeBase(vite);
 
-  // 3) Fallback solo para desarrollo local (no hardcodeado en componentes)
-  // En producción Vercel, VITE_API_URL debe estar configurado; este fallback evita crash en dev sin .env
-  return "http://127.0.0.1:3001/api";
+  // 3) Fallback SOLO en desarrollo. En producción, nunca usar localhost silenciosamente.
+  const isDev = (import.meta as any).env?.DEV === true;
+  if (isDev) return "http://127.0.0.1:3001/api";
+
+  // Producción sin VITE_API_URL configurado → error visible, no localhost
+  const msg = "La API de producción no está configurada. Configura VITE_API_URL en Vercel (ej: https://xxxxx.trycloudflare.com/api) y vuelve a desplegar.";
+  // Mostrar en consola y en UI si es posible
+  console.error(msg);
+  // Lanzar para que el llamador lo capture y muestre un toast/dialog en lugar de fetch a localhost
+  throw new Error(msg);
 }
 
 // Carga runtime opcional desde /config.json (generado por backend o deploy)
