@@ -173,30 +173,28 @@ if not defined BRANCH set "BRANCH=main"
 echo [OK] Rama %BRANCH%
 
 :: ============================================================
-:: PASO 1: Verificar/Iniciar backend Express en 127.0.0.1:3001
+:: PASO 1: Compilar e iniciar backend Express en 127.0.0.1:3001
 :: ============================================================
 echo.
-echo [1/7] Verificando backend...
-curl -s http://127.0.0.1:3001/health >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-  echo [OK] Backend ya responde en http://127.0.0.1:3001 - reutilizando
-) else (
-  echo Compilando servidor TypeScript...
-  cd /d "%SERVER_DIR%" && npm run build
-  if %ERRORLEVEL% neq 0 (
-    echo [ERROR] Build del servidor fallo
-    pause & goto MENU
-  )
-  cd /d "%PROJECT_ROOT%"
-  echo [OK] Build del servidor completado
-  echo Iniciando Express backend en http://127.0.0.1:3001...
-  if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
-  cd /d "%SERVER_DIR%"
-  start "OpenMedia Backend" /min cmd /c "node --env-file=.env dist/index.js"
-  cd /d "%PROJECT_ROOT%"
-  echo Esperando que el backend arranque...
-  timeout /t 5 /nobreak >nul
+echo [1/7] Compilando e iniciando backend...
+echo Compilando servidor TypeScript...
+cd /d "%SERVER_DIR%" && npm run build
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] Build del servidor fallo
+  pause & goto MENU
 )
+cd /d "%PROJECT_ROOT%"
+echo [OK] Build del servidor completado
+:: Matar backend anterior si esta corriendo
+taskkill /FI "WINDOWTITLE eq OpenMedia Backend" /F >nul 2>&1
+timeout /t 2 /nobreak >nul
+echo Iniciando Express backend en http://127.0.0.1:3001...
+if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
+cd /d "%SERVER_DIR%"
+start "OpenMedia Backend" /min cmd /c "node --env-file=.env dist/index.js"
+cd /d "%PROJECT_ROOT%"
+echo Esperando que el backend arranque...
+timeout /t 5 /nobreak >nul
 
 :: Health check backend local
 echo Verificando /health backend local...
@@ -373,9 +371,8 @@ if not exist "%CLIENT_DIR%\public" mkdir "%CLIENT_DIR%\public"
 :: Usar Node.js para escribir JSON valido (sin depender de paths de Windows)
 node -e "const fs=require('fs'),p=require('path');const dir=p.join(process.cwd(),'client','public');fs.mkdirSync(dir,{recursive:true});const cfg={apiUrl:'%API_URL%'};fs.writeFileSync(p.join(dir,'config.json'),JSON.stringify(cfg,null,2)+String.fromCharCode(10));console.log('OK:'+p.join(dir,'config.json'))"
 
-:: Verificar que se escribio correctamente
-:: Node escribe solo la URL (sin prefijo) para evitar problemas de parsing con delims=:
-node -e "const fs=require('fs'),p=require('path');const f=p.join(process.cwd(),'client','public','config.json');try{const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.apiUrl||c.apiUrl.indexOf('trycloudflare.com')===-1){process.exit(1)}process.exit(0)}catch(e){process.exit(1)}" >nul 2>&1
+:: Verificar que se escribio correctamente (usar PROJECT_ROOT explicito)
+node -e "const fs=require('fs');const f='%PROJECT_ROOT%\client\public\config.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(c.apiUrl && c.apiUrl.indexOf('trycloudflare.com')!==-1){process.stdout.write('VALID')}else{process.stdout.write('INVALID');process.exit(1)}"
 if %ERRORLEVEL% neq 0 (
   echo [ERROR] config.json no contiene una URL valida
   type "%CLIENT_DIR%\public\config.json"
