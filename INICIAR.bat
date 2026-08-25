@@ -146,7 +146,8 @@ if %ERRORLEVEL% neq 0 pause & goto MENU
 if not exist "%SERVER_DIR%\.env" (
   echo HOST=127.0.0.1> "%SERVER_DIR%\.env"
   echo PORT=3001>> "%SERVER_DIR%\.env"
-  echo [OK] server\.env creado
+  echo FFMPEG_PATH=../tools/ffmpeg/ffmpeg.exe>> "%SERVER_DIR%\.env"
+  echo [OK] server\.env creado con FFMPEG_PATH
 )
 
 :: Git info
