@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { router } from "./routes.js";
 import { initDatabase, getSettings, saveSettings } from "./database/db.js";
@@ -57,15 +58,17 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
 function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true; // same-origin / curl / health checks
   if (ALLOWED_ORIGINS.length === 0) {
-    // default: localhost + vercel preview (*.vercel.app) — no wildcard permanente sin config
+    // default: localhost + vercel preview (*.vercel.app) + Cloudflare Quick Tunnel (*.trycloudflare.com)
     if (/^https?:\/\/localhost:\d+$/.test(origin)) return true;
     if (/^https?:\/\/127\.0\.0\.1:\d+$/.test(origin)) return true;
     if (/^https?:\/\/\[::1\]:\d+$/.test(origin)) return true;
-    // permitir cualquier vercel.app si no hay lista explícita (para pruebas iniciales)
+    // permitir cualquier vercel.app si no hay lista explícita
     if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+    // permitir Cloudflare Quick Tunnel (cambia URL cada reinicio)
+    if (/^https:\/\/.*\.trycloudflare\.com$/.test(origin)) return true;
     return false;
   }
-  // lista explícita + regex para vercel preview
+  // lista explícita + regex para vercel preview y Cloudflare tunnel
   return ALLOWED_ORIGINS.some((allowed) => {
     if (allowed === origin) return true;
     if (allowed.includes("*")) {
@@ -73,7 +76,9 @@ function isAllowedOrigin(origin: string | undefined): boolean {
       return re.test(origin);
     }
     return false;
-  });
+  }) ||
+  // Siempre permitir Cloudflare Quick Tunnel (cambia URL cada reinicio)
+  /^https:\/\/.*\.trycloudflare\.com$/.test(origin);
 }
 
 const app = express();
@@ -108,7 +113,17 @@ app.use((req, res, next) => {
   // Para /api/downloads/:id, agrupar por prefijo para no crear key por id
   const pathKey = req.path.startsWith("/api/downloads/") ? "/api/downloads" : req.path;
   const key = `${ip}:${pathKey}`;
-  const limit = (Object.entries(rateLimits).find(([p]) => pathKey.startsWith(p) || req.path.startsWith(p))?.[1] ?? rateLimits.default)!;
+  // Buscar el prefijo más largo que coincida exactamente (evita que /api/downloads matchee /api/download)
+  const limit = (() => {
+    let best: [string, number] | null = null;
+    for (const [p, v] of Object.entries(rateLimits)) {
+      // Solo matchear: igualdad exacta o prefijo con / despues
+      if (pathKey === p || pathKey.startsWith(p + "/") || req.path === p || req.path.startsWith(p + "/")) {
+        if (!best || p.length > best[0].length) best = [p, v];
+      }
+    }
+    return best ? best[1] : (rateLimits.default ?? 60);
+  })();
   const now = Date.now();
   const arr = rateMap.get(key) ?? [];
   const recent = arr.filter((t) => now - t < 60_000);
@@ -165,6 +180,26 @@ app.get("/api/health", async (_req, res) => {
   const { getQueueStats } = await import("./services/queue.js");
   res.json({ ok: true, service: "openmedia", queue: getQueueStats() });
 });
+
+// Tunnel info: retorna la URL pública detectada (para que el frontend descubra la API automáticamente)
+app.get("/api/tunnel-info", (_req, res) => {
+  // Intentar detectar la URL del tunnel desde el log de cloudflared
+  let tunnelUrl: string | null = null;
+  try {
+    const cfLog = path.join(os.tmpdir(), "openmedia-cloudflared.log");
+    if (fs.existsSync(cfLog)) {
+      const log = fs.readFileSync(cfLog, "utf-8");
+      const match = log.match(/https:\/\/[a-zA-Z0-9][a-zA-Z0-9-]+\.trycloudflare\.com/g);
+      if (match && match.length > 0) tunnelUrl = match[match.length - 1]!;
+    }
+  } catch {}
+  res.json({
+    tunnelUrl,
+    serverUrl: `http://${HOST}:${PORT}`,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use("/api", router);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

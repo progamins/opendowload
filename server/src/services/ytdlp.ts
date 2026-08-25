@@ -225,7 +225,7 @@ export function startDownload(params: {
 
   if (params.kind === "audio") {
     args.push("-x", "--audio-format", params.targetExt);
-    if (params.audioQualityKbps) {
+    if (params.audioQualityKbps && params.audioQualityKbps !== "undefined" && params.audioQualityKbps !== "null") {
       const q = params.audioQualityKbps === "0" ? "0" : `${params.audioQualityKbps}K`;
       // wav no necesita calidad, pero no hace daño ignorarlo
       if (params.targetExt !== "wav") args.push("--audio-quality", q);

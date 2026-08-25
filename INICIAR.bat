@@ -142,6 +142,17 @@ echo  ==========================================
 echo.
 call :CHECKS
 if %ERRORLEVEL% neq 0 pause & goto MENU
+:: Auto-crear .env si no existe (requerido por node --env-file=.env)
+if not exist "%SERVER_DIR%\.env" (
+  echo [INFO] Creando server\.env con valores por defecto...
+  if exist "%SERVER_DIR%\.env.example" (
+    copy "%SERVER_DIR%\.env.example" "%SERVER_DIR%\.env" >nul
+  ) else (
+    echo HOST=127.0.0.1> "%SERVER_DIR%\.env"
+    echo PORT=3001>> "%SERVER_DIR%\.env"
+  )
+  echo [OK] server\.env creado
+)
 
 :: Verificar remote git
 for /f "delims=" %%r in ('git remote 2^>nul') do set "HAS_REMOTE=%%r"
@@ -180,7 +191,9 @@ if %ERRORLEVEL% equ 0 (
   echo [OK] Build del servidor completado
   echo Iniciando Express backend en http://127.0.0.1:3001...
   if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
-  start "OpenMedia Backend" /min cmd /c "npm run start --prefix "%SERVER_DIR%""
+  cd /d "%SERVER_DIR%"
+  start "OpenMedia Backend" /min cmd /c "node --env-file=.env dist/index.js"
+  cd /d "%PROJECT_ROOT%"
   echo Esperando que el backend arranque...
   timeout /t 5 /nobreak >nul
 )

@@ -64,7 +64,9 @@ export function getApiBaseUrl(): string {
 }
 
 // Carga runtime opcional desde /config.json (generado por backend o deploy)
-// Llamar una vez al iniciar la app; no bloquea si falla
+// Llamar una vez al iniciar la app; no bloquea si falla.
+// Si config.json no tiene apiUrl, intenta auto-descubrir vía /api/tunnel-info
+// (funciona cuando el frontend se sirve desde el mismo servidor o tunnel).
 export async function loadRuntimeConfig(): Promise<void> {
   if (runtimeLoaded) return;
   runtimeLoaded = true;
@@ -74,9 +76,26 @@ export async function loadRuntimeConfig(): Promise<void> {
       const data = await res.json();
       if (data?.apiUrl && typeof data.apiUrl === "string" && data.apiUrl.trim()) {
         window.__API_URL = data.apiUrl.trim();
+        return; // encontrado, no necesita auto-discovery
       }
     }
   } catch {
-    // silencio: usará VITE_API_URL
+    // silencio
+  }
+
+  // Auto-discovery: si no hay apiUrl en config.json, intentar /api/tunnel-info
+  // Esto funciona cuando el frontend se sirve desde el mismo origen que el backend
+  // (ej: directamente desde el tunnel, o en desarrollo local)
+  try {
+    const res = await fetch("/api/tunnel-info", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.tunnelUrl && typeof data.tunnelUrl === "string") {
+        window.__API_URL = data.tunnelUrl; // tunnelUrl ya incluye el dominio, normalizeBase agregará /api
+        console.info("[OpenMedia] API auto-descubierta desde tunnel-info:", data.tunnelUrl);
+      }
+    }
+  } catch {
+    // silencio: usará VITE_API_URL o fallback
   }
 }

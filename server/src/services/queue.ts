@@ -45,10 +45,16 @@ function formatSelectorFor(req: DownloadRequest): string {
   // formatId comes from a real, previously-listed yt-dlp format id -- never
   // free text from the client is passed straight through without this
   // lookup existing in the analyzed format list (enforced by the controller).
-  if (req.kind === "audio") {
-    return `${req.formatId}/bestaudio/best`;
+  // Validate formatId to prevent yt-dlp errors like "el archivo está vacío"
+  const fid = req.formatId?.trim();
+  if (!fid || fid === "undefined" || fid === "null") {
+    // Fallback seguro: best audio o best video+audio
+    return req.kind === "audio" ? "bestaudio/best" : "bestvideo+bestaudio/best";
   }
-  return `${req.formatId}+bestaudio/best`;
+  if (req.kind === "audio") {
+    return `${fid}/bestaudio/best`;
+  }
+  return `${fid}+bestaudio/best`;
 }
 
 export function enqueueDownload(req: DownloadRequest, info: MediaInfo, ip?: string): DownloadRecord {
