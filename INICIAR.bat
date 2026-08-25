@@ -57,14 +57,15 @@ call :CHECKS_FAST
 if exist "server\.env" (echo [OK] server.env) else echo [FALTA] server.env
 if exist "client\.env" (echo [OK] client.env) else echo [FALTA] client.env
 if exist "tools\ffmpeg\ffmpeg.exe" (echo [OK] ffmpeg portable) else echo [FALTA] ffmpeg portable
-netstat -ano | findstr ":3001" >nul
-if %ERRORLEVEL% equ 0 (echo [OCUPADO] :3001) else echo [LIBRE] :3001
+netstat -ano | findstr ":3001" | findstr "LISTENING" >nul
+if %ERRORLEVEL% equ 0 (echo [OCUPADO] :3001 - LISTENING) else echo [LIBRE] :3001 (solo TIME_WAIT, no bloquea)
 curl -s http://127.0.0.1:3001/health >nul 2>&1
 if %ERRORLEVEL% equ 0 (
   echo [OK] API
   curl -s http://127.0.0.1:3001/health
 ) else (
-  echo [OFF] API no responde
+  echo [OFF] API no responde - inicia con [1] o [2]
+  echo      TIME_WAIT en netstat es normal (conexiones cerradas), no es error
 )
 findstr "ALLOWED_ORIGINS" server\.env 2>nul
 pause
