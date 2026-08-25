@@ -81,6 +81,9 @@ if not exist "tools\ffmpeg\ffmpeg.exe" (
   powershell -NoProfile -Command "try{New-Item -Path tools\ffmpeg -ItemType Directory -Force|Out-Null;$z='$env:TEMP\ffmpeg.zip';Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $z -UseBasicParsing;Expand-Archive -Path $z -DestinationPath $env:TEMP\ff -Force;$e=Get-ChildItem $env:TEMP\ff -Recurse -Filter ffmpeg.exe|Select -First 1;Copy-Item $e.FullName tools\ffmpeg\ffmpeg.exe -Force;Copy-Item (Join-Path $e.DirectoryName ffprobe.exe) tools\ffmpeg\ffprobe.exe -Force -ErrorAction SilentlyContinue;Write-Host '[OK] ffmpeg'}catch{Write-Host '[ERROR]'}"
 )
 echo [1/3] Deps (secuencial, evita carrera tsc)...
+echo  Deteniendo procesos previos que bloquean archivos...
+taskkill /F /IM node.exe >nul 2>&1
+timeout /t 2 /nobreak >nul
 if exist "server\package-lock.json" (
   echo  Instalando server...
   call npm ci --prefix server
@@ -97,12 +100,19 @@ echo [OK] server
 if exist "client\package-lock.json" (
   echo  Instalando client...
   call npm ci --prefix client
-  if %ERRORLEVEL% neq 0 call npm install --prefix client
+  if %ERRORLEVEL% neq 0 (
+    echo [AVISO] EPERM en client (archivo bloqueado), reintentando...
+    taskkill /F /IM node.exe >nul 2>&1
+    timeout /t 2 /nobreak >nul
+    del /f /q "client\node_modules\@rolldown\binding-win32-x64-msvc\rolldown-binding.win32-x64-msvc.node" >nul 2>&1
+    call npm install --prefix client --force
+  )
 ) else (
   call npm install --prefix client
 )
 if %ERRORLEVEL% neq 0 (
-  echo [ERROR] client deps
+  echo [ERROR] client deps - cierra VS Code/antivirus y reintenta
+  echo        Si persiste: rmdir /s /q client\node_modules y vuelve a intentar
   pause
   goto MENU
 )
