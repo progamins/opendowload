@@ -171,11 +171,12 @@ if %ERRORLEVEL% equ 0 (
   echo [OK] Backend ya responde en http://127.0.0.1:3001 - reutilizando
 ) else (
   echo Compilando servidor TypeScript...
-  call npm run build --prefix "%SERVER_DIR%" 2>&1
+  cd /d "%SERVER_DIR%" && npm run build
   if %ERRORLEVEL% neq 0 (
     echo [ERROR] Build del servidor fallo
     pause & goto MENU
   )
+  cd /d "%PROJECT_ROOT%"
   echo [OK] Build del servidor completado
   echo Iniciando Express backend en http://127.0.0.1:3001...
   if exist "%PID_BACKEND%" del /q "%PID_BACKEND%" 2>nul
