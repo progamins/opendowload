@@ -203,10 +203,55 @@ echo [OK] Tunnel /health HTTP 200
 echo.
 echo [3/3] Actualizando config.json...
 node -e "const fs=require('fs'),p=require('path');const d=p.join(process.cwd(),'client','public');fs.mkdirSync(d,{recursive:true});const c={apiUrl:'%API_URL%'};fs.writeFileSync(p.join(d,'config.json'),JSON.stringify(c,null,2)+String.fromCharCode(10));console.log('OK')"
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] No se pudo escribir config.json
+  pause & goto MENU
+)
 echo.
 type "%CLIENT_DIR%\public\config.json"
 echo.
+:: Validar que no sea log
+findstr "trycloudflare.com" "%CLIENT_DIR%\public\config.json" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  echo [ERROR] config.json invalido
+  pause & goto MENU
+)
 
+:: Git automatico
+echo Actualizando git...
+git add client/public/config.json >nul 2>&1
+git diff --cached --quiet 2>nul
+if %ERRORLEVEL%==0 (
+  echo [INFO] config.json sin cambios - no se crea commit
+) else (
+  git commit -m "chore: update Cloudflare tunnel API URL" >nul 2>&1
+  if %ERRORLEVEL% neq 0 (
+    echo [WARN] commit fallo
+  ) else (
+    echo [OK] Commit creado
+    git push origin %BRANCH% >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+      echo [ERROR] git push fallo - revisa credenciales
+    ) else (
+      echo [OK] Push origin %BRANCH% - Vercel desplegando...
+      echo Esperando Vercel ^(max 120s^)...
+      for /l %%v in (1,1,24) do (
+        timeout /t 5 /nobreak >nul
+        curl -s https://opendowload.vercel.app/config.json > "%TEMP%\vercel.json" 2>nul
+        findstr "%TUNNEL_URL%" "%TEMP%\vercel.json" >nul 2>&1
+        if !ERRORLEVEL!==0 (
+          echo [OK] Vercel config.json actualizado
+          goto VERCEL_OK
+        )
+        echo   ...esperando Vercel %%v/24
+      )
+      echo [WARN] Vercel aun no refleja el cambio - revisa en unos segundos
+      :VERCEL_OK
+    )
+  )
+)
+
+echo.
 echo  ==========================================
 echo   OPENMEDIA LISTO
 echo  ==========================================
@@ -216,6 +261,8 @@ echo  Tunnel:  %TUNNEL_URL%
 echo  API:     %API_URL%
 echo  Frontend: https://opendowload.vercel.app
 echo.
+echo  Ventanas minimizadas: Backend y Tunnel siguen activos
+echo  Usa [4] para detener
 echo  ==========================================
 echo.
 pause
