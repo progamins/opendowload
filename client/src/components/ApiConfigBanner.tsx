@@ -17,7 +17,7 @@ export function ApiConfigBanner() {
     <div className="mx-auto mb-4 max-w-[720px] rounded-[16px] border border-amber-500/30 bg-amber-500/10 p-4">
       <p className="text-sm font-bold text-amber-400">🔒 Solo administrador — Conexión al backend</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-400">
-        Esta URL <b className="text-amber-300">solo la proporciona el administrador</b>. No la edites si no eres admin. Se obtiene ejecutando <span className="font-mono text-ink-200">INICIAR.bat → [2] Producción</span> en el PC servidor y copiando el enlace <span className="font-mono">https://xxxxx.trycloudflare.com</span>. Se guarda solo en este navegador y tiene prioridad sobre <span className="font-mono">VITE_API_URL</span>.
+        Esta URL <b className="text-amber-300">solo la proporciona el administrador</b>.
       </p>
       <div className="mt-3 flex gap-2">
         <input
@@ -45,7 +45,14 @@ export function ApiConfigBanner() {
           >Quitar</button>
         )}
       </div>
-      <p className="mt-2 font-data text-xs text-ink-500">Actual: {current ?? "no configurada"} {hasStored && "(desde este navegador)"}</p>
+      <a
+        href="https://wa.me/51902568187?text=Hola%20quiero%20la%20API%20de%20OpenMedia%20Downloader"
+        target="_blank"
+        rel="noopener"
+        className="mt-3 flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-3 text-sm font-black text-white shadow-lg shadow-[#25D366]/20 hover:brightness-[1.05] active:scale-[0.98]"
+      >
+        <span className="text-base">💬</span> Contáctame para tener la API — WhatsApp: 9025 68187
+      </a>
     </div>
   );
 }
