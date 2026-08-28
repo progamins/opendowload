@@ -1,12 +1,9 @@
 import { useState } from "react";
-import { getStoredApiUrl, setStoredApiUrl, clearStoredApiUrl, getApiBaseUrl } from "../config/api";
+import { getStoredApiUrl, setStoredApiUrl, clearStoredApiUrl } from "../config/api";
 
 export function ApiConfigBanner() {
   const [value, setValue] = useState(() => getStoredApiUrl() ?? "");
   const [saved, setSaved] = useState(false);
-  const current = (() => {
-    try { return getApiBaseUrl(); } catch { return null; }
-  })();
 
   const isProd = !(import.meta as any).env?.DEV;
   const hasStored = !!getStoredApiUrl();
