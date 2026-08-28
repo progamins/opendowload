@@ -189,10 +189,16 @@
 [data-theme="light"] .bg-graphite-800 { background-color: #ffffff !important; border: 1px solid #e2e8f0; }
 [data-theme="light"] .text-ink-50 { color: #0f172a !important; }
 [data-theme="light"] .text-ink-200 { color: #334155 !important; }
-[data-theme="light"] .text-ink-400 { color: #64748b !important; }
+[data-theme="light"] .text-ink-400 { color: #475569 !important; }
 [data-theme="light"] .text-ink-500 { color: #64748b !important; }
 [data-theme="light"] .text-ink-600 { color: #94a3b8 !important; }
 [data-theme="light"] ::placeholder { color: #94a3b8 !important; }
+/* Tabs Descargar/Historial: activo blanco sobre blanco era invisible — en claro activo = oscuro */
+[data-theme="light"] .bg-white { background-color: #0f172a !important; }
+[data-theme="light"] .text-graphite-950 { color: #ffffff !important; }
+[data-theme="light"] .bg-white.text-graphite-950 { background-color: #0f172a !important; color: #ffffff !important; }
+/* Inactivo más contrastado */
+[data-theme="light"] nav button.text-ink-400 { color: #475569 !important; }
 [data-theme="light"] .card-hover:hover {
   box-shadow: 0 12px 32px rgba(15,23,42,0.08), 0 0 0 1px #e2e8f0;
 }
