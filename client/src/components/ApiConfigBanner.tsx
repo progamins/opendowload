@@ -14,10 +14,10 @@ export function ApiConfigBanner() {
   if (!isProd) return null; // solo en producción Vercel tiene sentido configurarlo
 
   return (
-    <div className="mx-auto mb-4 max-w-[720px] rounded-[16px] border border-amber-500/20 bg-amber-500/10 p-4">
-      <p className="text-sm font-bold text-amber-400">Configuración de backend (runtime, sin redeploy)</p>
+    <div className="mx-auto mb-4 max-w-[720px] rounded-[16px] border border-amber-500/30 bg-amber-500/10 p-4">
+      <p className="text-sm font-bold text-amber-400">🔒 Solo administrador — Conexión al backend</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-400">
-        Pega aquí la URL del Tunnel que te muestra <span className="font-mono text-ink-200">INICIAR.bat → [2]</span> (ej: <span className="font-mono">https://xxxxx.trycloudflare.com</span>). Se guarda en este navegador y tiene prioridad sobre <span className="font-mono">VITE_API_URL</span>.
+        Esta URL <b className="text-amber-300">solo la proporciona el administrador</b>. No la edites si no eres admin. Se obtiene ejecutando <span className="font-mono text-ink-200">INICIAR.bat → [2] Producción</span> en el PC servidor y copiando el enlace <span className="font-mono">https://xxxxx.trycloudflare.com</span>. Se guarda solo en este navegador y tiene prioridad sobre <span className="font-mono">VITE_API_URL</span>.
       </p>
       <div className="mt-3 flex gap-2">
         <input
