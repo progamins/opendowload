@@ -129,18 +129,49 @@
   }
 }
 
-/* Light theme override, applied via [data-theme="light"] on <html> */
+/* Light theme — high contrast, legible */
 [data-theme="light"] {
   color-scheme: light;
-  --color-graphite-950: #f5f6f8;
-  --color-graphite-900: #eef0f3;
+  --color-graphite-950: #ffffff;
+  --color-graphite-900: #f8f9fa;
   --color-graphite-800: #ffffff;
-  --color-graphite-700: #f0f1f4;
-  --color-graphite-600: #e2e5ea;
-  --color-graphite-500: #c7cdd6;
-  --color-hairline: #dde1e7;
-  --color-ink-50: #14161a;
-  --color-ink-200: #333844;
-  --color-ink-400: #666e7c;
-  --color-ink-600: #9aa1ac;
+  --color-graphite-700: #f1f3f5;
+  --color-graphite-600: #dee2e6;
+  --color-graphite-500: #adb5bd;
+  --color-hairline: #dee2e6;
+  --color-ink-50: #0B0D10;
+  --color-ink-200: #212529;
+  --color-ink-400: #495057;
+  --color-ink-600: #868e96;
 }
+[data-theme="light"] body {
+  background:
+    radial-gradient(900px 600px at 15% -10%, color-mix(in srgb, var(--color-amber-500) 6%, transparent), transparent 60%),
+    radial-gradient(800px 600px at 85% 0%, color-mix(in srgb, var(--color-teal-500) 5%, transparent), transparent 60%),
+    var(--color-graphite-950);
+}
+[data-theme="light"] body::before {
+  opacity: 0.12;
+}
+[data-theme="light"] ::-webkit-scrollbar-track { background: #f1f3f5; }
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #ced4da; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #adb5bd; }
+[data-theme="light"] .glass {
+  background: rgba(255,255,255,0.92);
+  border-color: #dee2e6;
+}
+/* Light: make translucent white borders visible on light bg */
+[data-theme="light"] [class*="border-white"] {
+  --tw-border-style: solid;
+  border-color: var(--color-hairline) !important;
+}
+[data-theme="light"] [class*="bg-graphite-950"] {
+  background-color: #ffffff !important;
+}
+[data-theme="light"] .bg-graphite-900 {
+  background-color: #f8f9fa !important;
+}
+[data-theme="light"] .text-ink-400 { color: #495057 !important; }
+[data-theme="light"] .text-ink-500 { color: #6c757d !important; }
+[data-theme="light"] .text-ink-600 { color: #868e96 !important; }
+[data-theme="light"] ::placeholder { color: #adb5bd !important; }
