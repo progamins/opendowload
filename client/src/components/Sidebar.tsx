@@ -1,6 +1,6 @@
-import { Plus, Download, History, Settings, Music2, MessageCircle } from "lucide-react";
+import { Plus, Download, History, Music2, MessageCircle } from "lucide-react";
 
-type Tab = "download" | "history" | "settings";
+type Tab = "download" | "history";
 
 interface SidebarProps {
   tab: Tab;
@@ -45,13 +45,6 @@ export function Sidebar({ tab, activeDownloads, onTabChange, onNewDownload }: Si
           >
             <History size={16} /> Historial
           </button>
-
-          <button
-            onClick={() => onTabChange("settings")}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${tab === "settings" ? "bg-white text-graphite-950 shadow" : "text-ink-400 hover:bg-white/[0.06] hover:text-ink-50"}`}
-          >
-            <Settings size={16} /> Ajustes
-          </button>
         </nav>
 
         <div className="space-y-3 p-4">
@@ -74,7 +67,6 @@ export function Sidebar({ tab, activeDownloads, onTabChange, onNewDownload }: Si
         <button onClick={onNewDownload} className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-graphite-950 shadow"><Plus size={18} /></button>
         <button onClick={() => onTabChange("download")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "download" ? "bg-white text-graphite-950" : "text-ink-400"}`}><Download size={16} /><span className="text-[10px] font-bold">Descargas</span></button>
         <button onClick={() => onTabChange("history")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "history" ? "bg-white text-graphite-950" : "text-ink-400"}`}><History size={16} /><span className="text-[10px] font-bold">Historial</span></button>
-        <button onClick={() => onTabChange("settings")} className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 ${tab === "settings" ? "bg-white text-graphite-950" : "text-ink-400"}`}><Settings size={16} /><span className="text-[10px] font-bold">Ajustes</span></button>
         <a href="https://wa.me/506902568187" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-teal-400"><MessageCircle size={16} /><span className="text-[10px] font-bold">API</span></a>
       </nav>
     </>

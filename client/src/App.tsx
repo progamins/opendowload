@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { Download, Music2, AlertCircle, CheckCircle2, Loader2, X, FolderDown, Sparkles, Clock, Link2 } from "lucide-react";
 import { api } from "./api";
 import { downloadManager, type DownloadTask } from "./services/downloadManager";
-import type { AppSettings, DiagnosticCheck } from "./types";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
-import { SettingsPanel } from "./components/SettingsPanel";
 import { ApiConfigBanner } from "./components/ApiConfigBanner";
 
-type Tab = "download" | "history" | "settings";
+type Tab = "download" | "history";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("download");
@@ -17,16 +15,11 @@ export default function App() {
   const [url2, setUrl2] = useState("");
   const [showSecond, setShowSecond] = useState(false);
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
-  const [checks, setChecks] = useState<DiagnosticCheck[] | null>(null);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [ytdlpVersion, setYtdlpVersion] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     const unsub = downloadManager.subscribe(setTasks);
-    api.systemStatus().then((r) => setChecks(r.checks)).catch(() => setChecks(null));
-    api.systemVersions().then((r) => setYtdlpVersion(r.ytdlpVersion)).catch(() => {});
-    api.getSettings().then((s) => { setSettings(s); setTheme(s.theme === "light" ? "light" : "dark"); }).catch(() => {});
+    api.getSettings().then((s) => setTheme(s.theme === "light" ? "light" : "dark")).catch(() => {});
     return unsub;
   }, []);
 
@@ -192,25 +185,6 @@ export default function App() {
           )}
 
           {tab === "history" && <HistoryView />}
-          {tab === "settings" && (
-            <div className="mx-auto max-w-[720px]">
-              <h2 className="mb-4 font-display text-xl font-black">Ajustes</h2>
-              <SettingsPanel settings={settings!} onSave={async (p) => { const u = await api.saveSettings(p); setSettings(u); }} ytdlpVersion={ytdlpVersion} logDirHint="./logs" />
-              {checks && (
-                <div className="mt-6 rounded-[16px] border border-white/[0.06] bg-graphite-900 p-4">
-                  <h3 className="text-sm font-bold">Diagnóstico</h3>
-                  <div className="mt-3 space-y-2">
-                    {checks.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between rounded-xl bg-graphite-950 px-3 py-2">
-                        <span className="text-xs font-bold">{c.label}</span>
-                        <span className={`text-xs font-black ${c.ok ? "text-teal-400" : "text-danger-400"}`}>{c.ok ? "✓" : "✗"} {c.detail.slice(0, 40)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </main>
       </div>
     </div>
